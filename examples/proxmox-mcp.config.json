@@ -14,8 +14,15 @@
 
   "plugins": {
     "//": "Leave 'enabled' empty to load all plugins, or list only the ones you want.",
-    "//names": "about (locked), nodes, guests, storage, tasks, cluster, snapshots, lifecycle",
+    "//names": "about (locked), nodes, guests, storage, tasks, cluster, snapshots, lifecycle, management, backups, provisioning",
     "enabled": [],
     "disabled": []
+  },
+
+  "ai": {
+    "//": "Optional — powers the TUI's AI command bar. OpenAI-compatible endpoint.",
+    "endpoint": "",
+    "key": "",
+    "model": "gpt-4o-mini"
   }
 }

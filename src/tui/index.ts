@@ -54,7 +54,8 @@ async function main(): Promise<void> {
   if (process.argv.includes("--frame")) {
     const viewArg = (process.argv.find((a) => a.startsWith("--view=")) || "").split("=")[1];
     const view = ["guests", "nodes", "storage", "tasks"].includes(viewArg) ? viewArg : "guests";
-    process.stdout.write((await app.frame(98, 30, view)) + "\n");
+    const overlay = (process.argv.find((a) => a.startsWith("--overlay=")) || "").split("=")[1] || "";
+    process.stdout.write((await app.frame(98, 30, view, overlay)) + "\n");
     process.exit(0);
   }
 

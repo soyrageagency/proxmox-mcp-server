@@ -259,6 +259,9 @@ npm run tui:demo   # same, with realistic mock data (no cluster needed)
 ### Tabbed views — Nodes · Storage · Tasks
 <img src="./assets/screenshots/tui-storage.png" alt="Proxmox MCP terminal UI storage view by SoyRage Agency" width="92%">
 
+### 🤖 Give orders to the AI — in plain language
+<img src="./assets/screenshots/tui-ai.png" alt="Proxmox MCP terminal UI AI command bar by SoyRage Agency" width="92%">
+
 <sub>Rendered in <b>demo mode</b> · watermarked © SoyRage Agency · soyrage.es</sub>
 
 </div>
@@ -266,12 +269,16 @@ npm run tui:demo   # same, with realistic mock data (no cluster needed)
 **Features**
 
 - **Tabbed views** — `1` Guests · `2` Nodes · `3` Storage · `4` Tasks (or `Tab` to cycle), each with column headers and usage bars.
+- **🤖 AI command bar** — press **`a`** and type an order in plain English: *“restart db”*, *“shutdown 200”*, *“which VMs are down?”*, *“how much RAM is web using?”*. The AI proposes the action and asks you to **confirm** before it runs — questions get an instant answer. Powered by any OpenAI‑compatible endpoint (OpenAI, **Ollama**, LM Studio…); demo mode simulates it.
 - **Live** — a clock and cluster name in the header, auto‑refreshing every 5 s.
 - **Search** — press `/` to filter guests by name or VMID.
-- **Safe actions** — destructive `stop` asks for a `y/n` confirmation; read‑only mode hides all action keys.
+- **Help overlay** — press `?` for a keyboard cheat‑sheet.
+- **Safe actions** — destructive `stop` and every AI action ask for a `y/n` confirmation; read‑only mode hides all action keys.
 - **Rich details** — the selected guest shows its **OS** (via the QEMU agent), CPU/memory/disk gauges, cores and uptime; press `s` for its snapshots.
 
-**Keys:** `1‑4`/`Tab` views · `↑/↓` (or `j/k`) navigate · `/` filter · `s` snapshots · `S` start · `d` shutdown · `x` stop · `b` reboot · `r` refresh · `q` quit. VMs are cyan, containers magenta.
+**Keys:** `1‑4`/`Tab` views · `↑/↓` (or `j/k`) navigate · `/` filter · **`a` ask AI** · `s` snapshots · `S` start · `d` shutdown · `x` stop · `b` reboot · `r` refresh · `?` help · `q` quit. VMs are cyan, containers magenta.
+
+> 💡 Enable the AI with `PROXMOX_MCP_AI_ENDPOINT` (+ `_KEY`, `_MODEL`). Works with **Ollama** locally for free. Without it, the bar still understands common orders via a built‑in rule engine.
 
 ---
 
@@ -340,6 +347,9 @@ Every setting is an environment variable. A local **`.env`** is loaded automatic
 | `PROXMOX_MCP_PLUGINS` | — | Load **only** these plugins (empty = all). |
 | `PROXMOX_MCP_DISABLED_PLUGINS` | — | Disable these plugins. `about` is locked. |
 | `PROXMOX_MCP_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. |
+| `PROXMOX_MCP_AI_ENDPOINT` | — | OpenAI‑compatible base URL for the TUI's AI copilot (empty = rule‑based). |
+| `PROXMOX_MCP_AI_KEY` | — | Bearer key for the AI endpoint. |
+| `PROXMOX_MCP_AI_MODEL` | `gpt-4o-mini` | Model name for the AI endpoint. |
 | `PROXMOX_MCP_CONFIG` | `proxmox-mcp.config.json` | Path to the optional JSON config file. |
 
 ---
