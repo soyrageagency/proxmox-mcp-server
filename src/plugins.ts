@@ -23,6 +23,7 @@ import { registerStorageTools } from "./tools/storage.js";
 import { registerTaskTools } from "./tools/tasks.js";
 import { registerSnapshotTools } from "./tools/snapshots.js";
 import { registerLifecycleTools } from "./tools/lifecycle.js";
+import { registerManagementTools } from "./tools/management.js";
 
 /** High-level grouping used for docs. */
 export type PluginCategory =
@@ -33,7 +34,8 @@ export type PluginCategory =
   | "tasks"
   | "cluster"
   | "snapshots"
-  | "lifecycle";
+  | "lifecycle"
+  | "management";
 
 /** A self-contained capability group that can be toggled on or off. */
 export interface ToolPlugin {
@@ -108,10 +110,18 @@ export const BUILTIN_PLUGINS: readonly ToolPlugin[] = Object.freeze([
   {
     name: "lifecycle",
     title: "Guest lifecycle",
-    description: "Start, shutdown, stop and reboot VMs and containers.",
+    description: "Start, shutdown, stop, reboot, suspend and resume guests.",
     category: "lifecycle",
     mutating: true,
     register: registerLifecycleTools,
+  },
+  {
+    name: "management",
+    title: "Advanced management",
+    description: "Migrate, clone, resize, backup and delete guests.",
+    category: "management",
+    mutating: true,
+    register: registerManagementTools,
   },
 ]);
 

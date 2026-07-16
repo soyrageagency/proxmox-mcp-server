@@ -40,6 +40,7 @@
 - [How it works](#-how-it-works)
 - [Requirements](#-requirements)
 - [Installation](#-installation)
+- [The terminal UI (TUI)](#-the-terminal-ui-tui)
 - [Create a Proxmox API token](#-create-a-proxmox-api-token)
 - [Connecting to your AI client](#-connecting-to-your-ai-client)
 - [Configuration reference](#-configuration-reference)
@@ -90,11 +91,13 @@ Point any MCP‑capable assistant at it and you can operate your virtualization 
 | Area | Capabilities |
 | --- | --- |
 | 🧭 **Cluster** | List nodes with load, node status, cluster quorum/membership, and a consolidated `cluster_resources` view. |
-| 🖥️ **Guests** | List QEMU **VMs** and **LXC** containers (filter by kind / running), live status, and full config. |
-| ⚙️ **Lifecycle** | Start · graceful **shutdown** · hard **stop** · reboot — for both VMs and containers. |
+| 🖥️ **Guests** | List QEMU **VMs** and **LXC** containers (filter by kind / running), live status, full config, and **guest OS** (via the QEMU agent — name, version, IPs). |
+| ⚙️ **Lifecycle** | Start · graceful **shutdown** · hard **stop** · reboot · **suspend/resume** — for VMs and containers. |
+| 🚚 **Management** | **Migrate** to another node · **clone** (from templates) · **resize** CPU/RAM · **backup** (vzdump) · **delete**. |
 | 📸 **Snapshots** | List, **create** (optionally with RAM), **rollback** and **delete** snapshots. |
 | 💾 **Storage** | List storages per node with type, content and usage. |
 | 🧾 **Tasks** | Recent task log per node (backups, migrations, actions…). |
+| ⌨️ **Terminal UI** | A creative, lazydocker‑style TUI (`proxmox-mcp-tui`) with live gauges, guest OS, and one‑key actions. |
 | 🛡️ **Safety** | Global **read‑only** mode · **guest allowlist** (by VMID or name) · TLS verification control. |
 | 🔐 **Auth** | API **token** (recommended) or username/password **ticket** auth. |
 | 🧩 **Modular** | Every capability is a toggleable **plugin** — expose exactly the surface you want. |
@@ -171,6 +174,32 @@ When you're ready, set `PROXMOX_MCP_DEMO=false` and add your real host + token.
 ```bash
 npm run inspect     # after setting PROXMOX_HOST + token (see below)
 ```
+
+---
+
+## ⌨️ The terminal UI (TUI)
+
+Prefer the terminal? Launch **`proxmox-mcp-tui`** — a creative, [lazydocker](https://github.com/jesseduffield/lazydocker)‑style dashboard for your cluster that opens with a SoyRage Agency welcome, then drops you into a live, keyboard‑driven view of your VMs and containers. Hand‑rolled ANSI, **zero UI dependencies**.
+
+```bash
+npm run build
+npm run tui        # → interactive terminal dashboard
+npm run tui:demo   # same, with realistic mock data (no cluster needed)
+```
+
+<div align="center">
+
+### A warm welcome
+<img src="./assets/screenshots/tui-welcome.png" alt="SoyRage Agency Proxmox terminal welcome" width="80%">
+
+### Live dashboard — guests, OS, gauges & one‑key actions
+<img src="./assets/screenshots/tui-dashboard.png" alt="Proxmox MCP terminal UI by SoyRage Agency" width="90%">
+
+<sub>Rendered in <b>demo mode</b> · watermarked © SoyRage Agency · soyrage.es</sub>
+
+</div>
+
+**Keys:** `↑/↓` (or `j/k`) navigate · `s` snapshots · `S` start · `d` shutdown · `x` stop · `b` reboot · `r` refresh · `q` quit. VMs are cyan, containers magenta; the details pane shows the guest **OS**, CPU/memory/disk gauges and uptime. Read‑only mode hides the action keys.
 
 ---
 
@@ -300,6 +329,7 @@ Guests are addressed by **VMID or name**.
 | `list_guests` | `kind?` (`qemu`/`lxc`), `runningOnly?` | All VMs & containers with live stats. |
 | `guest_status` | `guest` | Live status of one VM/container. |
 | `guest_config` | `guest` | Full configuration of one guest. |
+| `guest_osinfo` | `guest` | The guest's **operating system** (agent name/version + IPs). |
 | `list_storage` | `node` | Storages on a node with usage. |
 | `list_tasks` | `node`, `limit?` | Recent tasks on a node. |
 | `cluster_status` | — | Cluster membership & quorum. |
@@ -314,6 +344,18 @@ Guests are addressed by **VMID or name**.
 | `shutdown_guest` | `guest`, `timeout?` | Graceful ACPI/OS shutdown (preferred). |
 | `stop_guest` | `guest` | Hard stop (power‑cord). Destructive — confirm first. |
 | `reboot_guest` | `guest` | Graceful reboot. |
+| `suspend_guest` | `guest`, `toDisk?` | Pause a VM in RAM (or hibernate to disk). |
+| `resume_guest` | `guest` | Resume a suspended VM. |
+
+### Management (**W**)
+
+| Tool | Parameters | Description |
+| --- | --- | --- |
+| `migrate_guest` | `guest`, `target`, `online?` | Move a guest to another node (live if running). |
+| `clone_guest` | `guest`, `newid`, `name?`, `full?`, `target?` | Clone a VM/CT (e.g. from a template). |
+| `set_guest_resources` | `guest`, `cores?`, `memory?` | Quickly change CPU cores / RAM (MB). |
+| `backup_guest` | `guest`, `storage`, `mode?`, `compress?` | Create a vzdump backup to a storage. |
+| `delete_guest` | `guest`, `confirm`, `purge?` | Destroy a guest (guarded: `confirm` must equal the VMID). |
 
 ### Snapshots (**W**)
 
@@ -349,12 +391,13 @@ The server is assembled from independent **plugins**, each owning one capability
 | --- | --- | --- | --- |
 | `about` 🔒 | identity | read | `about`, `list_plugins` |
 | `nodes` | nodes | read | `list_nodes`, `node_status` |
-| `guests` | guests | read | `list_guests`, `guest_status`, `guest_config` |
+| `guests` | guests | read | `list_guests`, `guest_status`, `guest_config`, `guest_osinfo` |
 | `storage` | storage | read | `list_storage` |
 | `tasks` | tasks | read | `list_tasks` |
 | `cluster` | cluster | read | `cluster_status`, `cluster_resources` |
 | `snapshots` | snapshots | read/write | `list_snapshots`, `create/rollback/delete_snapshot` |
-| `lifecycle` | lifecycle | write | `start/shutdown/stop/reboot_guest` |
+| `lifecycle` | lifecycle | write | `start/shutdown/stop/reboot/suspend/resume_guest` |
+| `management` | management | write | `migrate/clone/backup/delete_guest`, `set_guest_resources` |
 
 ```bash
 PROXMOX_MCP_PLUGINS=                                # (env) empty = load all
@@ -432,12 +475,12 @@ No. The server talks only to your Proxmox API and your MCP client over local std
 ## 🗺️ Roadmap
 
 - [x] Nodes, guests, lifecycle, snapshots, storage, tasks, cluster
+- [x] Guest **OS** detection (QEMU agent) · suspend/resume
+- [x] **Migrate**, **clone**, **resize**, **backup** (vzdump), **delete** guests
 - [x] API‑token & ticket auth · read‑only & allowlist · modular plugins
-- [x] One‑command installer
-- [ ] Backups (vzdump) create/list/restore
-- [ ] Migrations between nodes
-- [ ] VM/CT create & clone from templates
-- [ ] Interactive web panel with live monitoring (like the Docker sister project)
+- [x] One‑command installer · demo mode · terminal UI (TUI) · CI
+- [ ] Backup **restore** & scheduled backup jobs
+- [ ] VM/CT **create** from ISO/template
 - [ ] Published npm package for one‑line `npx` usage
 
 ---
