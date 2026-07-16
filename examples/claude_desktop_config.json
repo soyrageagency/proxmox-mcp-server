@@ -1,0 +1,18 @@
+{
+  "//": "Add this block to your Claude Desktop config (or any MCP client).",
+  "//path_macos": "~/Library/Application Support/Claude/claude_desktop_config.json",
+  "//path_windows": "%APPDATA%\\Claude\\claude_desktop_config.json",
+  "mcpServers": {
+    "proxmox": {
+      "command": "node",
+      "args": ["/absolute/path/to/proxmox-mcp-server/dist/index.js"],
+      "env": {
+        "PROXMOX_HOST": "https://192.168.1.10:8006",
+        "PROXMOX_TOKEN_ID": "root@pam!mcp",
+        "PROXMOX_TOKEN_SECRET": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "PROXMOX_VERIFY_TLS": "false",
+        "PROXMOX_MCP_READONLY": "false"
+      }
+    }
+  }
+}

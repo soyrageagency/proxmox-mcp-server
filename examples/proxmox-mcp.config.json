@@ -1,0 +1,21 @@
+{
+  "//": "Optional config file. Copy to the project root as proxmox-mcp.config.json,",
+  "//2": "or point PROXMOX_MCP_CONFIG at it. Environment variables override these.",
+  "//author": "SoyRage Agency — https://soyrage.es/",
+
+  "host": "https://192.168.1.10:8006",
+  "tokenId": "root@pam!mcp",
+  "tokenSecret": "",
+  "verifyTls": false,
+
+  "readOnly": false,
+  "allowlist": [],
+  "logLevel": "info",
+
+  "plugins": {
+    "//": "Leave 'enabled' empty to load all plugins, or list only the ones you want.",
+    "//names": "about (locked), nodes, guests, storage, tasks, cluster, snapshots, lifecycle",
+    "enabled": [],
+    "disabled": []
+  }
+}
