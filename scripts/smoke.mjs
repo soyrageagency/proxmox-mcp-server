@@ -58,6 +58,15 @@ const plug = await mcp({ PROXMOX_MCP_DISABLED_PLUGINS: "lifecycle" }, [init, not
 const plugTools = plug.find((m) => m.id === 2)?.result?.tools?.map((t) => t.name) || [];
 ok("plugin disable removes lifecycle", !plugTools.includes("start_guest"));
 
+// Demo mode: tools should return real (fabricated) data without a host.
+const callGuests = { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "list_guests", arguments: {} } };
+const callNodes = { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "list_nodes", arguments: {} } };
+const demo = await mcp({ PROXMOX_MCP_DEMO: "true" }, [init, notif, callGuests, callNodes]);
+const gText = demo.find((m) => m.id === 4)?.result?.content?.[0]?.text || "";
+const nText = demo.find((m) => m.id === 5)?.result?.content?.[0]?.text || "";
+ok("demo list_guests returns VMs & containers", gText.includes("web") && gText.includes("grafana") && /VM|CT/.test(gText));
+ok("demo list_nodes returns nodes", nText.includes("pve") && nText.includes("online"));
+
 let pass = 0, fail = 0;
 for (const r of results) {
   if (r.ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${r.name}`); }

@@ -47,7 +47,9 @@ async function main(): Promise<void> {
 
   // Fail soft: probe the API but keep starting so tool calls return clean
   // errors inside the chat client instead of a hard crash.
-  if (config.host && (config.tokenSecret || config.password)) {
+  if (config.demo) {
+    logger.info("DEMO mode: serving fabricated cluster data (no real Proxmox needed).");
+  } else if (config.host && (config.tokenSecret || config.password)) {
     try {
       await proxmox.ping();
       logger.info(`Connected to Proxmox VE at ${config.host}.`);
@@ -58,7 +60,7 @@ async function main(): Promise<void> {
       );
     }
   } else {
-    logger.warn("Proxmox host/credentials not configured — tools will return a setup hint.");
+    logger.warn("Proxmox host/credentials not configured — set them, or try PROXMOX_MCP_DEMO=true.");
   }
 
   const server = new McpServer(

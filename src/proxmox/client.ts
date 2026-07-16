@@ -80,6 +80,7 @@ export class ProxmoxClient {
   private readonly log: Logger;
   private readonly agent: Agent;
   private readonly allowlist: readonly string[];
+  private readonly demo: boolean;
   private ticket: { cookie: string; csrf: string } | null = null;
 
   constructor(
@@ -88,8 +89,15 @@ export class ProxmoxClient {
   ) {
     this.log = logger.child("api");
     this.allowlist = config.allowlist;
+    this.demo = config.demo;
+    if (this.demo) this.log.info("Running in DEMO mode (fabricated cluster data).");
     // Control TLS verification (Proxmox nodes are usually self-signed).
     this.agent = new Agent({ connect: { rejectUnauthorized: config.verifyTls } });
+  }
+
+  /** Whether the client is serving fabricated demo data. */
+  get isDemo(): boolean {
+    return this.demo;
   }
 
   /** True when using username/password ticket auth (vs. an API token). */
@@ -99,6 +107,7 @@ export class ProxmoxClient {
 
   /** Verify connectivity/credentials by hitting /version. */
   async ping(): Promise<void> {
+    if (this.demo) return;
     await this.get("/version");
     this.log.debug("Proxmox API reachable");
   }
@@ -193,11 +202,19 @@ export class ProxmoxClient {
 
   /** POST helper (form-encoded params). */
   post<T = unknown>(path: string, params?: Record<string, string | number>): Promise<T> {
+    if (this.demo) {
+      this.log.info(`(demo) POST ${path}`);
+      return Promise.resolve(`UPID:demo:00000000:${path}` as unknown as T);
+    }
     return this.request<T>("POST", path, params);
   }
 
   /** DELETE helper. */
   del<T = unknown>(path: string): Promise<T> {
+    if (this.demo) {
+      this.log.info(`(demo) DELETE ${path}`);
+      return Promise.resolve({} as T);
+    }
     return this.request<T>("DELETE", path);
   }
 
@@ -205,11 +222,19 @@ export class ProxmoxClient {
 
   /** Proxmox version info. */
   version(): Promise<Record<string, unknown>> {
+    if (this.demo) return Promise.resolve({ version: "8.2.4", release: "8.2", repoid: "demo" });
     return this.get<Record<string, unknown>>("/version");
+  }
+
+  /** Detailed status of a single node. */
+  nodeStatus(node: string): Promise<Record<string, unknown>> {
+    if (this.demo) return Promise.resolve(demoNodeStatus(node));
+    return this.get<Record<string, unknown>>(`/nodes/${node}/status`);
   }
 
   /** All cluster nodes with load summary. */
   async nodes(): Promise<NodeSummary[]> {
+    if (this.demo) return demoNodes();
     const list = await this.get<Array<Record<string, unknown>>>("/nodes");
     return (list ?? []).map((n) => ({
       node: String(n.node ?? ""),
@@ -224,12 +249,21 @@ export class ProxmoxClient {
 
   /** Raw cluster resources (optionally filtered by type). */
   clusterResources(type?: string): Promise<RawResource[]> {
+    if (this.demo) {
+      const all = demoResources();
+      return Promise.resolve(
+        type === "vm" ? all.filter((r) => r.type === "qemu" || r.type === "lxc")
+          : type ? all.filter((r) => r.type === type)
+          : all,
+      );
+    }
     const q = type ? `?type=${encodeURIComponent(type)}` : "";
     return this.get<RawResource[]>(`/cluster/resources${q}`);
   }
 
   /** Cluster status (quorum, members). */
   clusterStatus(): Promise<Array<Record<string, unknown>>> {
+    if (this.demo) return Promise.resolve(demoClusterStatus());
     return this.get<Array<Record<string, unknown>>>("/cluster/status");
   }
 
@@ -305,26 +339,159 @@ export class ProxmoxClient {
 
   /** Current runtime status of a guest. */
   guestStatus(guest: Guest): Promise<Record<string, unknown>> {
+    if (this.demo) return Promise.resolve(demoGuestStatus(guest));
     return this.get<Record<string, unknown>>(`${this.guestBase(guest)}/status/current`);
   }
 
   /** Full configuration of a guest. */
   guestConfig(guest: Guest): Promise<Record<string, unknown>> {
+    if (this.demo) return Promise.resolve(demoGuestConfig(guest));
     return this.get<Record<string, unknown>>(`${this.guestBase(guest)}/config`);
   }
 
   /** Storage available on a node. */
   storage(node: string): Promise<Array<Record<string, unknown>>> {
+    if (this.demo) return Promise.resolve(demoStorage());
     return this.get<Array<Record<string, unknown>>>(`/nodes/${node}/storage`);
   }
 
   /** Recent tasks on a node. */
   tasks(node: string, limit = 25): Promise<Array<Record<string, unknown>>> {
+    if (this.demo) return Promise.resolve(demoTasks().slice(0, limit));
     return this.get<Array<Record<string, unknown>>>(`/nodes/${node}/tasks?limit=${limit}`);
   }
 
   /** Snapshots of a guest. */
   snapshots(guest: Guest): Promise<Array<Record<string, unknown>>> {
+    if (this.demo) return Promise.resolve(demoSnapshots(guest));
     return this.get<Array<Record<string, unknown>>>(`${this.guestBase(guest)}/snapshot`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Demo data — a believable two-node cluster so the server can be tried without
+// a real Proxmox host (PROXMOX_MCP_DEMO=true).
+// ---------------------------------------------------------------------------
+
+const GiB = 1024 ** 3;
+
+function demoNodes(): NodeSummary[] {
+  return [
+    { node: "pve", status: "online", cpu: 0.14, maxcpu: 16, mem: 18 * GiB, maxmem: 64 * GiB, uptime: 1_987_200 },
+    { node: "pve2", status: "online", cpu: 0.06, maxcpu: 8, mem: 9 * GiB, maxmem: 32 * GiB, uptime: 1_814_400 },
+  ];
+}
+
+function demoNodeStatus(node: string): Record<string, unknown> {
+  const n = demoNodes().find((x) => x.node === node) ?? demoNodes()[0];
+  return {
+    uptime: n.uptime,
+    cpu: n.cpu,
+    loadavg: ["0.42", "0.51", "0.48"],
+    memory: { total: n.maxmem, used: n.mem, free: n.maxmem - n.mem },
+    swap: { total: 8 * GiB, used: 0.2 * GiB },
+    rootfs: { total: 100 * GiB, used: 34 * GiB },
+    pveversion: "pve-manager/8.2.4",
+    kversion: "Linux 6.8.12-1-pve",
+    cpuinfo: { model: "AMD Ryzen 7 5825U", cores: n.maxcpu, sockets: 1 },
+  };
+}
+
+function demoResources(): RawResource[] {
+  const g = (type: "qemu" | "lxc", vmid: number, name: string, node: string, status: string, cpu: number, maxcpu: number, mem: number, maxmem: number, disk: number, maxdisk: number, uptime: number): RawResource =>
+    ({ type, vmid, name, node, status, cpu, maxcpu, mem, maxmem, disk, maxdisk, uptime, template: 0 });
+  return [
+    { type: "node", node: "pve", status: "online", cpu: 0.14, maxcpu: 16, mem: 18 * GiB, maxmem: 64 * GiB },
+    { type: "node", node: "pve2", status: "online", cpu: 0.06, maxcpu: 8, mem: 9 * GiB, maxmem: 32 * GiB },
+    g("qemu", 100, "web", "pve", "running", 0.031, 4, 1.8 * GiB, 4 * GiB, 12 * GiB, 32 * GiB, 1_987_000),
+    g("qemu", 101, "db", "pve", "running", 0.087, 4, 6.2 * GiB, 8 * GiB, 48 * GiB, 120 * GiB, 1_986_000),
+    g("qemu", 102, "windows-rdp", "pve2", "stopped", 0, 6, 0, 16 * GiB, 0, 200 * GiB, 0),
+    g("lxc", 200, "nginx-proxy", "pve", "running", 0.004, 1, 96 * 1024 * 1024, 512 * 1024 * 1024, 1.2 * GiB, 8 * GiB, 1_980_000),
+    g("lxc", 201, "grafana", "pve", "running", 0.012, 2, 240 * 1024 * 1024, 2 * GiB, 3.5 * GiB, 16 * GiB, 1_200_000),
+    g("lxc", 202, "pihole", "pve2", "running", 0.002, 1, 64 * 1024 * 1024, 512 * 1024 * 1024, 0.9 * GiB, 8 * GiB, 900_000),
+    g("lxc", 203, "backup-runner", "pve2", "stopped", 0, 1, 0, 512 * 1024 * 1024, 0, 8 * GiB, 0),
+    { type: "storage", node: "pve", name: "local", status: "available" },
+    { type: "storage", node: "pve", name: "local-lvm", status: "available" },
+  ];
+}
+
+function demoClusterStatus(): Array<Record<string, unknown>> {
+  return [
+    { type: "cluster", name: "soyrage-lab", nodes: 2, quorate: 1, version: 4 },
+    { type: "node", name: "pve", online: 1, local: 1, ip: "10.0.0.11" },
+    { type: "node", name: "pve2", online: 1, local: 0, ip: "10.0.0.12" },
+  ];
+}
+
+function demoGuestStatus(guest: Guest): Record<string, unknown> {
+  const running = guest.status === "running";
+  return {
+    status: guest.status,
+    vmid: guest.vmid,
+    name: guest.name,
+    cpus: guest.maxcpu,
+    cpu: guest.cpu,
+    mem: guest.mem,
+    maxmem: guest.maxmem,
+    disk: guest.disk,
+    maxdisk: guest.maxdisk,
+    uptime: guest.uptime,
+    ...(guest.type === "qemu" ? { qmpstatus: guest.status, agent: running ? 1 : 0 } : { type: "lxc" }),
+    ha: { managed: 0 },
+  };
+}
+
+function demoGuestConfig(guest: Guest): Record<string, unknown> {
+  if (guest.type === "qemu") {
+    return {
+      name: guest.name,
+      cores: guest.maxcpu,
+      sockets: 1,
+      memory: Math.round(guest.maxmem / (1024 * 1024)),
+      ostype: "l26",
+      scsi0: `local-lvm:vm-${guest.vmid}-disk-0,size=${Math.round(guest.maxdisk / GiB)}G`,
+      net0: "virtio=DE:AD:BE:EF:00:0A,bridge=vmbr0",
+      boot: "order=scsi0",
+      agent: 1,
+    };
+  }
+  return {
+    hostname: guest.name,
+    cores: guest.maxcpu,
+    memory: Math.round(guest.maxmem / (1024 * 1024)),
+    rootfs: `local-lvm:subvol-${guest.vmid}-disk-0,size=${Math.round(guest.maxdisk / GiB)}G`,
+    net0: "name=eth0,bridge=vmbr0,ip=dhcp",
+    ostype: "debian",
+    unprivileged: 1,
+  };
+}
+
+function demoStorage(): Array<Record<string, unknown>> {
+  return [
+    { storage: "local", type: "dir", content: "iso,vztmpl,backup", active: 1, total: 100 * GiB, used: 34 * GiB, avail: 66 * GiB },
+    { storage: "local-lvm", type: "lvmthin", content: "images,rootdir", active: 1, total: 400 * GiB, used: 176 * GiB, avail: 224 * GiB },
+    { storage: "nas-backups", type: "nfs", content: "backup", active: 1, total: 4000 * GiB, used: 1200 * GiB, avail: 2800 * GiB },
+  ];
+}
+
+function demoTasks(): Array<Record<string, unknown>> {
+  const now = Math.floor(Date.now() / 1000);
+  return [
+    { type: "vzdump", id: "101", user: "root@pam", status: "OK", starttime: now - 3600, endtime: now - 3400 },
+    { type: "qmstart", id: "100", user: "root@pam!mcp", status: "OK", starttime: now - 7200, endtime: now - 7199 },
+    { type: "vzsnapshot", id: "201", user: "root@pam", status: "OK", starttime: now - 10800, endtime: now - 10797 },
+    { type: "vncproxy", id: "100", user: "admin@pve", status: "OK", starttime: now - 14400, endtime: now - 14395 },
+    { type: "vzdump", id: "200", user: "root@pam", status: "OK", starttime: now - 90000, endtime: now - 89700 },
+  ];
+}
+
+function demoSnapshots(guest: Guest): Array<Record<string, unknown>> {
+  if (guest.vmid === 101) {
+    return [
+      { name: "pre-upgrade", parent: "", description: "before PostgreSQL 16 upgrade" },
+      { name: "nightly", parent: "pre-upgrade", description: "automated nightly" },
+      { name: "current", parent: "nightly", description: "You are here!" },
+    ];
+  }
+  return [{ name: "current", parent: "", description: "You are here!" }];
 }
