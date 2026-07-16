@@ -60,7 +60,7 @@
 
 ## ⚡ Quick install (one command)
 
-New to this? The installer clones the project, builds it, and **configures Claude Desktop for you**. You only need [Git](https://git-scm.com/), [Node.js ≥ 18](https://nodejs.org/) and a Proxmox **API token** (see [below](#-create-a-proxmox-api-token)).
+New to this? The installer clones the project, builds it, and runs a **guided setup wizard** — you just **paste your Proxmox address and API token**, it **tests the connection**, and writes everything (`.env` + Claude Desktop config) for you. You only need [Git](https://git-scm.com/) and [Node.js ≥ 18](https://nodejs.org/).
 
 **Windows (PowerShell):**
 ```powershell
@@ -72,7 +72,27 @@ irm https://raw.githubusercontent.com/soyrageagency/proxmox-mcp-server/main/inst
 curl -fsSL https://raw.githubusercontent.com/soyrageagency/proxmox-mcp-server/main/install.sh | bash
 ```
 
-Already cloned? Run `npm run setup`. The installer **backs up** and **merges** your existing config, so other MCP servers are preserved. Then fill in your host + token, restart Claude Desktop, and ask *“List my Proxmox VMs.”* 🎉
+The wizard asks a few simple questions and looks like this:
+
+```text
+  Proxmox address (e.g. https://192.168.1.10:8006): https://10.0.0.11:8006
+  Do you have an API token? (Y/n): y
+  Token ID (user@realm!name, e.g. root@pam!mcp): root@pam!mcp
+  Token secret (paste the UUID): ••••••••-••••-••••-••••-••••••••••••
+  Verify the TLS certificate? (most Proxmox use self-signed → No) (y/N): n
+  Read-only mode? (view only — safest) (y/N): n
+
+  Testing the connection…
+  ✓ Connected to Proxmox VE (8.2.4)
+  ✓ Saved credentials to .env
+  ✓ Added the "proxmox" server in your Claude config.
+
+  All set!  →  restart Claude Desktop and ask "List my Proxmox VMs."
+```
+
+Already cloned the repo? Just run **`npm run setup`**. Don't have a token yet? See [Create a Proxmox API token](#-create-a-proxmox-api-token) (2 minutes). Want to try it with **no cluster at all**? Jump to [demo mode](#-try-it-instantly--demo-mode-no-proxmox-needed).
+
+The installer **backs up** and **merges** your existing config, so other MCP servers are preserved.
 
 > 💙 If this saves you time, please [**support the project on PayPal**](https://www.paypal.com/paypalme/soyrageagency) and drop a ⭐.
 
