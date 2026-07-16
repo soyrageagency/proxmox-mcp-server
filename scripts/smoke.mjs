@@ -43,19 +43,21 @@ const full = await mcp({}, [init, notif, listReq, aboutReq]);
 const initRes = full.find((m) => m.id === 1);
 ok("initialize returns SoyRage instructions", initRes?.result?.instructions?.includes("SoyRage Agency"));
 const tools = full.find((m) => m.id === 2)?.result?.tools?.map((t) => t.name) || [];
-ok("full mode exposes 27 tools", tools.length === 27, `got ${tools.length}`);
+ok("full mode exposes 32 tools", tools.length === 32, `got ${tools.length}`);
 ok("has lifecycle & snapshot tools", tools.includes("start_guest") && tools.includes("create_snapshot"));
 ok("has suspend/resume", tools.includes("suspend_guest") && tools.includes("resume_guest"));
 ok("has OS info tool", tools.includes("guest_osinfo"));
 ok("has advanced management", tools.includes("migrate_guest") && tools.includes("clone_guest") && tools.includes("backup_guest") && tools.includes("delete_guest") && tools.includes("set_guest_resources"));
+ok("has backups list/restore", tools.includes("list_backups") && tools.includes("restore_backup"));
+ok("has provisioning (templates + create)", tools.includes("list_templates") && tools.includes("create_container") && tools.includes("create_vm"));
 ok("has cluster/guest insight", tools.includes("list_guests") && tools.includes("cluster_resources"));
 const about = full.find((m) => m.id === 3)?.result?.content?.[0]?.text || "";
 ok("about shows PayPal + author", about.includes("paypalme/soyrageagency") && about.includes("SoyRage Agency"));
 
 const ro = await mcp({ PROXMOX_MCP_READONLY: "true" }, [init, notif, listReq]);
 const roTools = ro.find((m) => m.id === 2)?.result?.tools?.map((t) => t.name) || [];
-ok("read-only hides all writes", !roTools.includes("start_guest") && !roTools.includes("create_snapshot") && !roTools.includes("migrate_guest") && !roTools.includes("delete_guest"));
-ok("read-only keeps insight (incl. osinfo)", roTools.includes("list_guests") && roTools.includes("list_snapshots") && roTools.includes("guest_osinfo"));
+ok("read-only hides all writes", !roTools.includes("start_guest") && !roTools.includes("create_snapshot") && !roTools.includes("migrate_guest") && !roTools.includes("delete_guest") && !roTools.includes("restore_backup") && !roTools.includes("create_vm"));
+ok("read-only keeps insight (incl. osinfo/backups/templates)", roTools.includes("list_guests") && roTools.includes("guest_osinfo") && roTools.includes("list_backups") && roTools.includes("list_templates"));
 
 const plug = await mcp({ PROXMOX_MCP_DISABLED_PLUGINS: "lifecycle" }, [init, notif, listReq]);
 const plugTools = plug.find((m) => m.id === 2)?.result?.tools?.map((t) => t.name) || [];
