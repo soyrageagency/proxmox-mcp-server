@@ -425,6 +425,71 @@ export class ProxmoxClient {
     if (nodes.length === 0) throw new Error("No Proxmox nodes found.");
     return nodes[0].node;
   }
+
+  /** Whether the AI copilot is available (demo always simulates it). */
+  get aiEnabled(): boolean {
+    return this.demo || Boolean(this.config.aiEndpoint);
+  }
+
+  /**
+   * AI copilot: interpret a natural-language order against the current guests
+   * and return a structured intent — either an action to run on a guest, or a
+   * plain-language answer. Uses an OpenAI-compatible endpoint when configured;
+   * demo mode simulates it with a small rule engine.
+   */
+  async aiAssist(prompt: string): Promise<AiIntent> {
+    const guests = await this.guests();
+    if (this.demo || !this.config.aiEndpoint) {
+      return demoAi(prompt, guests, this.demo ? "demo-ai" : "unconfigured");
+    }
+    const roster = guests
+      .map((g) => `${g.vmid} ${g.name} (${g.type === "qemu" ? "VM" : "CT"}, ${g.status})`)
+      .join("; ");
+    const system =
+      "You operate a Proxmox VE cluster. Given a user's order in plain language, reply ONLY with a compact JSON object " +
+      '{"action":"start|shutdown|stop|reboot|snapshot|none","guest":"<vmid or name, empty if none>","answer":"<short answer if it is a question, else empty>","explanation":"<one short sentence>"}. ' +
+      `Available guests: ${roster}. Prefer 'shutdown' over 'stop'. If the request is a question, set action to none and fill 'answer'.`;
+    try {
+      const url = this.config.aiEndpoint.replace(/\/$/, "") + "/chat/completions";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.config.aiKey ? { Authorization: `Bearer ${this.config.aiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: this.config.aiModel,
+          temperature: 0.1,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: prompt },
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error(`AI endpoint returned ${res.status}`);
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const raw = data.choices?.[0]?.message?.content ?? "";
+      const json = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+      return {
+        action: ["start", "shutdown", "stop", "reboot", "snapshot"].includes(json.action) ? json.action : "none",
+        guest: String(json.guest ?? ""),
+        answer: String(json.answer ?? ""),
+        explanation: String(json.explanation ?? ""),
+        source: "ai",
+      };
+    } catch (err) {
+      return { action: "none", guest: "", answer: `AI error: ${(err as Error).message}`, explanation: "", source: "error" };
+    }
+  }
+}
+
+/** A structured AI intent returned by aiAssist. */
+export interface AiIntent {
+  action: "start" | "shutdown" | "stop" | "reboot" | "snapshot" | "none";
+  guest: string;
+  answer: string;
+  explanation: string;
+  source: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -577,6 +642,42 @@ function demoOsInfo(guest: Guest): Record<string, unknown> {
     info.agentNote = "Guest is not running.";
   }
   return info;
+}
+
+/** Rule-based AI copilot used in demo mode (and as an unconfigured fallback). */
+function demoAi(prompt: string, guests: Guest[], source: string): AiIntent {
+  const p = prompt.toLowerCase();
+  const g = guests.find((x) => p.includes(x.name.toLowerCase()) || new RegExp(`\\b${x.vmid}\\b`).test(p));
+
+  // Questions first.
+  if (/\b(which|what|list|show|how many|down|running|stopped|status|using|ram|memory|cpu)\b/.test(p) && !/\b(restart|reboot|stop|start|shutdown|snapshot)\b/.test(p)) {
+    if (/\b(down|stopped|off)\b/.test(p)) {
+      const down = guests.filter((x) => x.status !== "running");
+      const ans = down.length ? down.map((x) => `${x.name} (VMID ${x.vmid})`).join(", ") : "none — everything is running.";
+      return { action: "none", guest: "", answer: `Stopped guests: ${ans}`, explanation: "", source };
+    }
+    if (/\b(ram|memory)\b/.test(p) && g) {
+      return { action: "none", guest: g.name, answer: `${g.name} (VMID ${g.vmid}) is using ${(g.mem / 1024 ** 3).toFixed(1)} GB of ${(g.maxmem / 1024 ** 3).toFixed(1)} GB RAM.`, explanation: "", source };
+    }
+    const running = guests.filter((x) => x.status === "running");
+    return { action: "none", guest: "", answer: `${running.length}/${guests.length} guests running: ${running.map((x) => x.name).join(", ")}.`, explanation: "", source };
+  }
+
+  // Actions.
+  let action: AiIntent["action"] = "none";
+  if (/\b(reboot|restart)\b/.test(p)) action = "reboot";
+  else if (/\b(stop|kill|force)\b/.test(p)) action = "stop";
+  else if (/\b(shutdown|shut down|turn off|power off)\b/.test(p)) action = "shutdown";
+  else if (/\b(start|boot|power on|turn on)\b/.test(p)) action = "start";
+  else if (/\bsnapshot\b/.test(p)) action = "snapshot";
+
+  if (action !== "none" && g) {
+    return { action, guest: g.name, answer: "", explanation: `Interpreted "${prompt}" as ${action} ${g.name}.${source === "unconfigured" ? " (rule-based — set PROXMOX_MCP_AI_ENDPOINT for a real model)" : ""}`, source };
+  }
+  if (action !== "none" && !g) {
+    return { action: "none", guest: "", answer: `Which guest should I ${action}? Try e.g. "${action} db".`, explanation: "", source };
+  }
+  return { action: "none", guest: "", answer: `I didn't catch an action. Try "restart db", "shutdown 200", or ask "which VMs are down?".`, explanation: "", source };
 }
 
 function demoStorageContent(content?: string): Array<Record<string, unknown>> {

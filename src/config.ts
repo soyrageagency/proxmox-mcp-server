@@ -33,6 +33,7 @@ interface FileConfig {
   allowlist?: string[];
   logLevel?: string;
   plugins?: { enabled?: string[]; disabled?: string[] };
+  ai?: { endpoint?: string; key?: string; model?: string };
 }
 
 /** Read and parse the JSON config file, if present. Never throws. */
@@ -123,6 +124,12 @@ export interface AppConfig {
   readonly logLevel: LogLevel;
   /** Modular plugin selection. */
   readonly plugins: PluginSelection;
+  /** Optional OpenAI-compatible endpoint powering the TUI's AI copilot. */
+  readonly aiEndpoint: string;
+  /** API key for the AI endpoint (bearer). */
+  readonly aiKey: string;
+  /** Model name for the AI endpoint. */
+  readonly aiModel: string;
 }
 
 /** Build the configuration object. Called once from the entry point. */
@@ -162,5 +169,8 @@ export function loadConfig(): AppConfig {
         envList("PROXMOX_MCP_DISABLED_PLUGINS", file.plugins?.disabled ?? []),
       ),
     }),
+    aiEndpoint: envStr("PROXMOX_MCP_AI_ENDPOINT", file.ai?.endpoint ?? ""),
+    aiKey: envStr("PROXMOX_MCP_AI_KEY", file.ai?.key ?? ""),
+    aiModel: envStr("PROXMOX_MCP_AI_MODEL", file.ai?.model ?? "gpt-4o-mini"),
   });
 }

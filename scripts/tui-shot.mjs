@@ -97,11 +97,13 @@ mkdirSync("assets/screenshots", { recursive: true });
 const env = { ...process.env, PROXMOX_MCP_DEMO: "true", FORCE_COLOR: "3" };
 const frame = execSync("node dist/tui/index.js --frame", { env, encoding: "utf8" });
 const storage = execSync("node dist/tui/index.js --frame --view=storage", { env, encoding: "utf8" });
+const ai = execSync("node dist/tui/index.js --frame --overlay=ai", { env, encoding: "utf8" });
 const splash = execSync("node dist/tui/index.js --splash", { env, encoding: "utf8" });
 
 const browser = await chromium.launch();
 await shoot(browser, splash, "assets/screenshots/tui-welcome.png");
 await shoot(browser, frame, "assets/screenshots/tui-dashboard.png");
 await shoot(browser, storage, "assets/screenshots/tui-storage.png");
+await shoot(browser, ai, "assets/screenshots/tui-ai.png");
 await browser.close();
 rmSync("assets/screenshots/_tmp.html", { force: true });

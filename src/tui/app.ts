@@ -44,7 +44,8 @@ function stripLen(s: string): number {
 
 type Mode = "splash" | "main";
 type View = "guests" | "nodes" | "storage" | "tasks";
-type Input = "normal" | "filter" | "confirm";
+type Input = "normal" | "filter" | "confirm" | "ai" | "message";
+type Pending = { label: string; run: () => Promise<void> };
 const VIEWS: View[] = ["guests", "nodes", "storage", "tasks"];
 const VIEW_LABEL: Record<View, string> = { guests: "Guests", nodes: "Nodes", storage: "Storage", tasks: "Tasks" };
 
@@ -64,7 +65,10 @@ export class TuiApp {
   private snaps: Array<Record<string, unknown>> = [];
   private selOs = "";
   private filter = "";
-  private confirm: { kind: "start" | "shutdown" | "stop" | "reboot"; guest: Guest } | null = null;
+  private pending: Pending | null = null;
+  private aiInput = "";
+  private message = "";
+  private messageTitle = "";
   private status = "";
   private clusterName = "";
   private pveVersion = "";
@@ -99,8 +103,10 @@ export class TuiApp {
     if (key === "\x03" || key === "\x04") return void this.quit();
     if (this.mode === "splash") return void this.enterMain();
 
+    if (this.input === "message") { this.message = ""; this.input = "normal"; this.render(); return; }
     if (this.input === "confirm") return this.onConfirmKey(key);
     if (this.input === "filter") return this.onFilterKey(key);
+    if (this.input === "ai") return this.onAiKey(key);
 
     switch (key) {
       case "q":
@@ -113,6 +119,11 @@ export class TuiApp {
       case "\x1b[A": case "k": return this.move(-1);
       case "\x1b[B": case "j": return this.move(1);
       case "r": this.status = "Refreshing…"; return void this.refresh();
+      case "?": this.message = this.helpText(); this.messageTitle = "Keyboard shortcuts"; this.input = "message"; return this.render();
+      case "a": case ":":
+        if (this.client.aiEnabled) { this.input = "ai"; this.aiInput = ""; this.render(); }
+        else { this.status = color.yellow("AI copilot off — set PROXMOX_MCP_AI_ENDPOINT (or use demo)."); this.render(); }
+        return;
       case "/":
         if (this.view === "guests") { this.input = "filter"; this.render(); }
         return;
@@ -130,6 +141,79 @@ export class TuiApp {
     }
   }
 
+  private onAiKey(key: string): void {
+    if (key === "\x1b") { this.input = "normal"; this.aiInput = ""; this.render(); return; }
+    if (key === "\r" || key === "\n") { const q = this.aiInput.trim(); this.input = "normal"; this.aiInput = ""; this.render(); if (q) void this.runAi(q); return; }
+    if (key === "\x7f" || key === "\b") { this.aiInput = this.aiInput.slice(0, -1); }
+    else if (key >= " " && key.length === 1) { this.aiInput += key; }
+    this.render();
+  }
+
+  /** Interpret a natural-language order and, if it's an action, confirm it. */
+  private async runAi(prompt: string): Promise<void> {
+    this.status = color.gray(`AI thinking…`);
+    this.render();
+    try {
+      const intent = await this.client.aiAssist(prompt);
+      if (intent.action !== "none") {
+        const g = this.guests.find((x) => x.name === intent.guest || String(x.vmid) === intent.guest);
+        if (!g) { this.showMessage(`AI: couldn't find guest "${intent.guest}".`); return; }
+        if (this.config.readOnly) { this.showMessage(`AI suggests ${intent.action} ${g.name}, but the server is read-only.`); return; }
+        const label = `AI: ${intent.action} ${g.name} (VMID ${g.vmid})${intent.explanation ? " — " + intent.explanation : ""}`;
+        this.pending = { label, run: () => this.runAiAction(intent.action, g) };
+        this.input = "confirm";
+        this.status = "";
+        this.render();
+      } else {
+        this.showMessage(intent.answer || "AI had no answer.");
+      }
+    } catch (err) {
+      this.showMessage(`AI error: ${(err as Error).message}`);
+    }
+  }
+
+  private async runAiAction(action: string, g: Guest): Promise<void> {
+    if (action === "snapshot") {
+      const name = "ai-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+      try {
+        this.status = `snapshot ${g.name}…`; this.render();
+        await this.client.post(`${this.client.guestBase(g)}/snapshot`, { snapname: name });
+        this.status = color.green(`✓ snapshot "${name}" of ${g.name}`);
+        await this.refresh();
+      } catch (err) { this.status = color.red(`✗ ${(err as Error).message}`); this.render(); }
+      return;
+    }
+    await this.doAction(action as "start" | "shutdown" | "stop" | "reboot", g);
+  }
+
+  private showMessage(text: string, title = "AI copilot"): void {
+    this.message = text;
+    this.messageTitle = title;
+    this.input = "message";
+    this.status = "";
+    this.render();
+  }
+
+  private helpText(): string {
+    return [
+      color.gray("Navigation"),
+      "  1-4 / Tab    switch view (Guests · Nodes · Storage · Tasks)",
+      "  ↑/↓  j/k     move selection      /  filter guests",
+      "",
+      color.gray("Actions (Guests)"),
+      "  S  start     d  shutdown     x  stop     b  reboot",
+      "  s  snapshots of the selected guest",
+      "",
+      color.gray("AI copilot"),
+      `  ${color.accent("a")}  or  ${color.accent(":")}    give an order in plain language, e.g.:`,
+      `     ${color.brightCyan('"restart db"')}   ${color.brightCyan('"which VMs are down?"')}`,
+      `     ${color.brightCyan('"how much RAM is web using?"')}   ${color.brightCyan('"shutdown 200"')}`,
+      "",
+      color.gray("General"),
+      "  r  refresh      ?  this help      q  quit",
+    ].join("\n");
+  }
+
   private onFilterKey(key: string): void {
     if (key === "\r" || key === "\n" || key === "\x1b") { this.input = "normal"; this.render(); return; }
     if (key === "\x7f" || key === "\b") { this.filter = this.filter.slice(0, -1); }
@@ -139,10 +223,10 @@ export class TuiApp {
   }
 
   private onConfirmKey(key: string): void {
-    const pending = this.confirm;
-    this.confirm = null;
+    const pending = this.pending;
+    this.pending = null;
     this.input = "normal";
-    if ((key === "y" || key === "Y") && pending) void this.doAction(pending.kind, pending.guest);
+    if ((key === "y" || key === "Y") && pending) void pending.run();
     else { this.status = color.gray("Cancelled."); this.render(); }
   }
 
@@ -169,7 +253,12 @@ export class TuiApp {
     const g = this.filteredGuests()[this.selected];
     if (!g) return;
     if (this.config.readOnly) { this.status = color.yellow("Read-only mode — actions are disabled."); this.render(); return; }
-    if (needsConfirm) { this.confirm = { kind, guest: g }; this.input = "confirm"; this.render(); return; }
+    if (needsConfirm) {
+      this.pending = { label: `Confirm ${kind} ${g.name} (VMID ${g.vmid})`, run: () => this.doAction(kind, g) };
+      this.input = "confirm";
+      this.render();
+      return;
+    }
     void this.doAction(kind, g);
   }
 
@@ -344,7 +433,7 @@ export class TuiApp {
   private renderSplash(): void { this.paint(this.splashLines()); }
 
   /** Render one static main frame to a string (for `--frame`). */
-  async frame(cols = 100, rows = 30, view = "guests"): Promise<string> {
+  async frame(cols = 100, rows = 30, view = "guests", overlay = ""): Promise<string> {
     this.mode = "main";
     this.view = (VIEWS.includes(view as View) ? view : "guests") as View;
     const [nodes, guests] = await Promise.all([this.client.nodes(), this.client.guests()]);
@@ -353,6 +442,8 @@ export class TuiApp {
     this.pveVersion = "8.2.4";
     this.clusterName = "soyrage-lab";
     await this.fetchViewData(); // no render side-effect (keeps --frame output clean)
+    if (overlay === "ai") { this.input = "ai"; this.aiInput = "restart the db vm"; }
+    else if (overlay === "help") { this.input = "message"; this.message = this.helpText(); this.messageTitle = "Keyboard shortcuts"; }
     return this.buildMainLines(cols, rows).join("\n");
   }
 
@@ -373,6 +464,7 @@ export class TuiApp {
 
     lines.push(this.footerKeys(cols));
     lines.push(this.footerBrand(cols));
+    if (this.input === "message" && this.message) this.overlay(lines, this.messageTitle || "Info", this.message, cols, rows);
     return lines;
   }
 
@@ -571,14 +663,29 @@ export class TuiApp {
 
   private footerKeys(cols: number): string {
     let keys: string;
-    if (this.input === "filter") keys = `filter: ${color.bold(this.filter)}${color.dim("▏")}   ${color.gray("Enter/Esc to close")}`;
-    else if (this.input === "confirm" && this.confirm) keys = color.yellow(`Confirm ${this.confirm.kind} ${this.confirm.guest.name} (VMID ${this.confirm.guest.vmid})?  y / n`);
+    if (this.input === "ai") keys = `${color.accent("AI ❯")} ${color.bold(this.aiInput)}${color.dim("▏")}   ${color.gray("Enter to run · Esc to cancel")}`;
+    else if (this.input === "filter") keys = `filter: ${color.bold(this.filter)}${color.dim("▏")}   ${color.gray("Enter/Esc to close")}`;
+    else if (this.input === "confirm" && this.pending) keys = color.yellow(`${this.pending.label}?  y / n`);
+    else if (this.input === "message") keys = color.gray("press any key to dismiss");
     else if (this.view === "guests") keys = this.config.readOnly
-      ? "1-4 tabs · ↑/↓ move · / filter · s snapshots · r refresh · q quit"
-      : "1-4 tabs · ↑/↓ · / filter · s snap · S start · d shutdown · x stop · b reboot · r · q";
-    else keys = "1-4 tabs · ↑/↓ move · r refresh · q quit";
+      ? "1-4 tabs · ↑/↓ · / filter · a AI · s snap · r · ? help · q"
+      : "1-4 · ↑/↓ · / filter · a AI · s snap · S start · d shutdown · x stop · b reboot · r · ? · q";
+    else keys = "1-4 tabs · ↑/↓ move · a AI · r refresh · ? help · q quit";
     const status = this.status && this.input === "normal" ? `  ${this.status}` : "";
     return truncate(` ${color.gray(keys)}${status}`, cols);
+  }
+
+  /** Overlay a centered modal box (help / AI answers) onto the frame. */
+  private overlay(lines: string[], title: string, text: string, cols: number, rows: number): void {
+    const raw = text.split("\n");
+    const w = Math.min(cols - 6, Math.max(20, ...raw.map((l) => stripLen(l))) + 4);
+    const content = raw.map((l) => ` ${l}`);
+    const box = drawBox(title, content, w, content.length + 2);
+    const top = Math.max(1, Math.floor((rows - box.length) / 2));
+    const left = Math.max(0, Math.floor((cols - w) / 2));
+    for (let i = 0; i < box.length; i++) {
+      if (top + i < lines.length) lines[top + i] = " ".repeat(left) + box[i];
+    }
   }
 
   private footerBrand(cols: number): string {
