@@ -143,10 +143,33 @@ npm install
 npm run build
 ```
 
-Try it locally with the MCP Inspector (fill in your creds first, see below):
+### 🧪 Try it instantly — demo mode (no Proxmox needed)
+
+Want to evaluate it right now without a cluster? Run in **demo mode** — the
+server serves a believable 2‑node lab (VMs, containers, storage, snapshots):
 
 ```bash
-npm run inspect
+npm run build
+PROXMOX_MCP_DEMO=true npm run inspect     # explore every tool in the MCP Inspector
+```
+
+Or point Claude Desktop at it with `"PROXMOX_MCP_DEMO": "true"` in the `env`
+block and ask *“List my Proxmox VMs and containers.”* You'll get output like:
+
+```
+VMID  KIND  NAME           NODE  STATUS   CPU   MEMORY          UPTIME
+100   VM    web            pve   running  3.1%  1.8 GB/4.0 GB   22d 23h
+101   VM    db             pve   running  8.7%  6.2 GB/8.0 GB   22d 23h
+200   CT    nginx-proxy    pve   running  0.4%  96.0 MB/512 MB  22d 22h
+201   CT    grafana        pve   running  1.2%  240 MB/2.0 GB   13d 21h
+```
+
+When you're ready, set `PROXMOX_MCP_DEMO=false` and add your real host + token.
+
+### With a real cluster
+
+```bash
+npm run inspect     # after setting PROXMOX_HOST + token (see below)
 ```
 
 ---
@@ -211,6 +234,7 @@ Every setting is an environment variable. A local **`.env`** is loaded automatic
 | `PROXMOX_PASSWORD` | — | Password for ticket auth. |
 | `PROXMOX_VERIFY_TLS` | `false` | Verify the node's TLS certificate. |
 | `PROXMOX_MCP_READONLY` | `false` | Hide **all** state‑changing tools. |
+| `PROXMOX_MCP_DEMO` | `false` | Serve fabricated demo data (no real host needed). |
 | `PROXMOX_MCP_ALLOWLIST` | — | Comma‑separated VMIDs/names the AI may touch (empty = all). |
 | `PROXMOX_MCP_PLUGINS` | — | Load **only** these plugins (empty = all). |
 | `PROXMOX_MCP_DISABLED_PLUGINS` | — | Disable these plugins. `about` is locked. |

@@ -52,7 +52,7 @@ export function registerNodeTools({ server, proxmox }: ToolContext): void {
     },
     async ({ node }) =>
       guard(async () => {
-        const status = await proxmox.get<Record<string, unknown>>(`/nodes/${node}/status`);
+        const status = await proxmox.nodeStatus(node);
         return ok(`Status of node "${node}":\n\n${asJsonBlock(status)}`);
       }),
   );

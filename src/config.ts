@@ -29,6 +29,7 @@ interface FileConfig {
   password?: string;
   verifyTls?: boolean;
   readOnly?: boolean;
+  demo?: boolean;
   allowlist?: string[];
   logLevel?: string;
   plugins?: { enabled?: string[]; disabled?: string[] };
@@ -114,6 +115,8 @@ export interface AppConfig {
   readonly verifyTls: boolean;
   /** When true, all mutating tools are hidden. */
   readonly readOnly: boolean;
+  /** When true, serve fabricated demo data instead of a real cluster. */
+  readonly demo: boolean;
   /** Optional VMID/name allowlist (empty = allow all). */
   readonly allowlist: readonly string[];
   /** Diagnostic log level. */
@@ -148,6 +151,7 @@ export function loadConfig(): AppConfig {
     password: envStr("PROXMOX_PASSWORD", file.password ?? ""),
     verifyTls: envFlag("PROXMOX_VERIFY_TLS", file.verifyTls ?? false),
     readOnly: envFlag("PROXMOX_MCP_READONLY", file.readOnly ?? false),
+    demo: envFlag("PROXMOX_MCP_DEMO", file.demo ?? false),
     allowlist: Object.freeze(envList("PROXMOX_MCP_ALLOWLIST", file.allowlist ?? [])),
     logLevel,
     plugins: Object.freeze({
