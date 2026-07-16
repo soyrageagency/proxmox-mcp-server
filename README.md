@@ -201,7 +201,7 @@ npm run inspect     # after setting PROXMOX_HOST + token (see below)
 
 ## ⌨️ The terminal UI (TUI)
 
-Prefer the terminal? Launch **`proxmox-mcp-tui`** — a creative, [lazydocker](https://github.com/jesseduffield/lazydocker)‑style dashboard for your cluster that opens with a SoyRage Agency welcome, then drops you into a live, keyboard‑driven view of your VMs and containers. Hand‑rolled ANSI, **zero UI dependencies**.
+Prefer the terminal? Launch **`proxmox-mcp-tui`** — a creative, professional, [lazydocker](https://github.com/jesseduffield/lazydocker)‑style dashboard for your cluster that opens with a SoyRage Agency welcome, then drops you into a live, keyboard‑driven view. Hand‑rolled ANSI, **zero UI dependencies**.
 
 ```bash
 npm run build
@@ -214,14 +214,25 @@ npm run tui:demo   # same, with realistic mock data (no cluster needed)
 ### A warm welcome
 <img src="./assets/screenshots/tui-welcome.png" alt="SoyRage Agency Proxmox terminal welcome" width="80%">
 
-### Live dashboard — guests, OS, gauges & one‑key actions
-<img src="./assets/screenshots/tui-dashboard.png" alt="Proxmox MCP terminal UI by SoyRage Agency" width="90%">
+### Guests — OS, live gauges & one‑key actions
+<img src="./assets/screenshots/tui-dashboard.png" alt="Proxmox MCP terminal UI by SoyRage Agency" width="92%">
+
+### Tabbed views — Nodes · Storage · Tasks
+<img src="./assets/screenshots/tui-storage.png" alt="Proxmox MCP terminal UI storage view by SoyRage Agency" width="92%">
 
 <sub>Rendered in <b>demo mode</b> · watermarked © SoyRage Agency · soyrage.es</sub>
 
 </div>
 
-**Keys:** `↑/↓` (or `j/k`) navigate · `s` snapshots · `S` start · `d` shutdown · `x` stop · `b` reboot · `r` refresh · `q` quit. VMs are cyan, containers magenta; the details pane shows the guest **OS**, CPU/memory/disk gauges and uptime. Read‑only mode hides the action keys.
+**Features**
+
+- **Tabbed views** — `1` Guests · `2` Nodes · `3` Storage · `4` Tasks (or `Tab` to cycle), each with column headers and usage bars.
+- **Live** — a clock and cluster name in the header, auto‑refreshing every 5 s.
+- **Search** — press `/` to filter guests by name or VMID.
+- **Safe actions** — destructive `stop` asks for a `y/n` confirmation; read‑only mode hides all action keys.
+- **Rich details** — the selected guest shows its **OS** (via the QEMU agent), CPU/memory/disk gauges, cores and uptime; press `s` for its snapshots.
+
+**Keys:** `1‑4`/`Tab` views · `↑/↓` (or `j/k`) navigate · `/` filter · `s` snapshots · `S` start · `d` shutdown · `x` stop · `b` reboot · `r` refresh · `q` quit. VMs are cyan, containers magenta.
 
 ---
 

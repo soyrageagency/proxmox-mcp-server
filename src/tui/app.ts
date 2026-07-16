@@ -1,10 +1,11 @@
 /**
  * Terminal UI application.
  *
- * A creative, lazydocker-style TUI for a Proxmox VE cluster: a full-screen
- * dashboard with a live guest list (VMs + LXC), per-guest CPU/memory gauges, a
- * details/snapshots pane and one-key lifecycle actions — wrapped in a SoyRage
- * Agency welcome. Hand-rolled ANSI (no curses library, zero UI dependencies).
+ * A professional, feature-rich lazydocker-style TUI for a Proxmox VE cluster.
+ * Tabbed views (Guests · Nodes · Storage · Tasks), column headers, a live
+ * clock, guest search/filter, confirmation prompts for destructive actions,
+ * per-guest OS + CPU/memory/disk gauges and one-key lifecycle control — all in
+ * hand-rolled ANSI with zero UI dependencies, wrapped in a SoyRage welcome.
  *
  * Part of Proxmox MCP Server.
  * Crafted by SoyRage Agency — https://soyrage.es/
@@ -35,19 +36,40 @@ function upt(s: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/** Visible length ignoring ANSI escapes. */
+function stripLen(s: string): number {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;]*m/g, "").length;
+}
+
 type Mode = "splash" | "main";
+type View = "guests" | "nodes" | "storage" | "tasks";
+type Input = "normal" | "filter" | "confirm";
+const VIEWS: View[] = ["guests", "nodes", "storage", "tasks"];
+const VIEW_LABEL: Record<View, string> = { guests: "Guests", nodes: "Nodes", storage: "Storage", tasks: "Tasks" };
+
+interface StorageRow { node: string; storage: string; type: string; used: number; total: number; active: boolean; content: string; }
 
 /** The interactive terminal application. */
 export class TuiApp {
   private mode: Mode = "splash";
+  private view: View = "guests";
+  private input: Input = "normal";
   private nodes: NodeSummary[] = [];
   private guests: Guest[] = [];
+  private storages: StorageRow[] = [];
+  private tasks: Array<Record<string, unknown>> = [];
   private selected = 0;
   private showSnaps = false;
   private snaps: Array<Record<string, unknown>> = [];
   private selOs = "";
+  private filter = "";
+  private confirm: { kind: "start" | "shutdown" | "stop" | "reboot"; guest: Guest } | null = null;
   private status = "";
+  private clusterName = "";
+  private pveVersion = "";
   private timer: NodeJS.Timeout | null = null;
+  private clock: NodeJS.Timeout | null = null;
   private refreshing = false;
 
   constructor(
@@ -77,94 +99,81 @@ export class TuiApp {
     if (key === "\x03" || key === "\x04") return void this.quit();
     if (this.mode === "splash") return void this.enterMain();
 
+    if (this.input === "confirm") return this.onConfirmKey(key);
+    if (this.input === "filter") return this.onFilterKey(key);
+
     switch (key) {
       case "q":
         return void this.quit();
-      case "\x1b[A":
-      case "k":
-        this.move(-1);
-        break;
-      case "\x1b[B":
-      case "j":
-        this.move(1);
-        break;
-      case "r":
-        this.status = "Refreshing…";
-        void this.refresh();
-        break;
+      case "1": return this.setView("guests");
+      case "2": return this.setView("nodes");
+      case "3": return this.setView("storage");
+      case "4": return this.setView("tasks");
+      case "\t": return this.setView(VIEWS[(VIEWS.indexOf(this.view) + 1) % VIEWS.length]);
+      case "\x1b[A": case "k": return this.move(-1);
+      case "\x1b[B": case "j": return this.move(1);
+      case "r": this.status = "Refreshing…"; return void this.refresh();
+      case "/":
+        if (this.view === "guests") { this.input = "filter"; this.render(); }
+        return;
       case "s":
-        this.showSnaps = !this.showSnaps;
-        if (this.showSnaps) void this.loadSnaps();
-        else this.render();
-        break;
-      case "S":
-        void this.action("start");
-        break;
-      case "d":
-        void this.action("shutdown");
-        break;
-      case "x":
-        void this.action("stop");
-        break;
-      case "b":
-        void this.action("reboot");
-        break;
-      default:
-        break;
+        if (this.view === "guests") {
+          this.showSnaps = !this.showSnaps;
+          if (this.showSnaps) void this.loadSnaps(); else this.render();
+        }
+        return;
+      case "S": return this.requestAction("start", false);
+      case "d": return this.requestAction("shutdown", false);
+      case "x": return this.requestAction("stop", true);
+      case "b": return this.requestAction("reboot", false);
+      default: return;
     }
+  }
+
+  private onFilterKey(key: string): void {
+    if (key === "\r" || key === "\n" || key === "\x1b") { this.input = "normal"; this.render(); return; }
+    if (key === "\x7f" || key === "\b") { this.filter = this.filter.slice(0, -1); }
+    else if (key >= " " && key.length === 1) { this.filter += key; }
+    this.selected = 0;
+    this.render();
+  }
+
+  private onConfirmKey(key: string): void {
+    const pending = this.confirm;
+    this.confirm = null;
+    this.input = "normal";
+    if ((key === "y" || key === "Y") && pending) void this.doAction(pending.kind, pending.guest);
+    else { this.status = color.gray("Cancelled."); this.render(); }
+  }
+
+  private setView(v: View): void {
+    if (this.view === v) return;
+    this.view = v;
+    this.selected = 0;
+    this.showSnaps = false;
+    this.render();
+    void this.loadView();
   }
 
   private move(delta: number): void {
-    if (this.guests.length === 0) return;
-    this.selected = (this.selected + delta + this.guests.length) % this.guests.length;
+    const n = this.rowsForView().length;
+    if (n === 0) return;
+    this.selected = (this.selected + delta + n) % n;
     this.showSnaps = false;
-    this.selOs = "";
-    this.render();
-    void this.updateSelOs();
+    if (this.view === "guests") { this.selOs = ""; this.render(); void this.updateSelOs(); }
+    else this.render();
   }
 
-  /** Resolve the OS of the selected guest (best-effort). No side effects. */
-  private async fetchSelOs(): Promise<void> {
-    const g = this.current();
-    if (!g) {
-      this.selOs = "";
-      return;
-    }
-    try {
-      const info = await this.client.osInfo(g);
-      const agent = (info.agent as { result?: Record<string, unknown> } | undefined)?.result;
-      this.selOs = String(agent?.["pretty-name"] ?? agent?.name ?? info.ostype ?? "");
-    } catch {
-      this.selOs = "";
-    }
-  }
-
-  /** Fetch the selected guest's OS and re-render (interactive use only). */
-  private async updateSelOs(): Promise<void> {
-    await this.fetchSelOs();
-    this.render();
-  }
-
-  private current(): Guest | undefined {
-    return this.guests[this.selected];
-  }
-
-  // ---- Lifecycle ----------------------------------------------------------
-
-  private async enterMain(): Promise<void> {
-    this.mode = "main";
-    await this.refresh();
-    this.timer = setInterval(() => void this.refresh(), 5000);
-  }
-
-  private async action(kind: "start" | "shutdown" | "stop" | "reboot"): Promise<void> {
-    const g = this.current();
+  private requestAction(kind: "start" | "shutdown" | "stop" | "reboot", needsConfirm: boolean): void {
+    if (this.view !== "guests") return;
+    const g = this.filteredGuests()[this.selected];
     if (!g) return;
-    if (this.config.readOnly) {
-      this.status = color.yellow("Read-only mode — actions are disabled.");
-      this.render();
-      return;
-    }
+    if (this.config.readOnly) { this.status = color.yellow("Read-only mode — actions are disabled."); this.render(); return; }
+    if (needsConfirm) { this.confirm = { kind, guest: g }; this.input = "confirm"; this.render(); return; }
+    void this.doAction(kind, g);
+  }
+
+  private async doAction(kind: "start" | "shutdown" | "stop" | "reboot", g: Guest): Promise<void> {
     try {
       this.status = `${kind} ${g.name} (VMID ${g.vmid})…`;
       this.render();
@@ -177,16 +186,80 @@ export class TuiApp {
     }
   }
 
+  private current(): Guest | undefined {
+    return this.filteredGuests()[this.selected];
+  }
+
+  // ---- Data ---------------------------------------------------------------
+
+  private async enterMain(): Promise<void> {
+    this.mode = "main";
+    // Best-effort cluster metadata for the header.
+    this.client.version().then((v) => { this.pveVersion = String(v.version ?? ""); }).catch(() => {});
+    this.client.clusterStatus().then((s) => {
+      const c = (s ?? []).find((x) => x.type === "cluster");
+      this.clusterName = c ? String(c.name ?? "") : "standalone";
+    }).catch(() => {});
+    await this.refresh();
+    this.timer = setInterval(() => void this.refresh(), 5000);
+    this.clock = setInterval(() => this.render(), 1000);
+    if (typeof this.clock.unref === "function") this.clock.unref();
+  }
+
+  private async loadView(): Promise<void> {
+    await this.fetchViewData();
+    this.render();
+  }
+
+  private async fetchViewData(): Promise<void> {
+    try {
+      if (this.view === "storage") {
+        const rows: StorageRow[] = [];
+        const seen = new Set<string>();
+        for (const n of this.nodes) {
+          const list = await this.client.storage(n.node);
+          for (const s of list ?? []) {
+            const id = String(s.storage ?? "");
+            if (seen.has(id)) continue;
+            seen.add(id);
+            rows.push({
+              node: n.node, storage: id, type: String(s.type ?? "—"),
+              used: Number(s.used ?? 0), total: Number(s.total ?? 0),
+              active: Boolean(Number(s.active)), content: String(s.content ?? ""),
+            });
+          }
+        }
+        this.storages = rows;
+      } else if (this.view === "tasks") {
+        const node = this.nodes[0]?.node;
+        this.tasks = node ? await this.client.tasks(node, 30) : [];
+      } else if (this.view === "guests") {
+        await this.fetchSelOs();
+      }
+    } catch (err) {
+      this.status = color.red(`Error: ${(err as Error).message}`);
+    }
+  }
+
+  private async updateSelOs(): Promise<void> { await this.fetchSelOs(); this.render(); }
+
+  private async fetchSelOs(): Promise<void> {
+    const g = this.current();
+    if (!g) { this.selOs = ""; return; }
+    try {
+      const info = await this.client.osInfo(g);
+      const agent = (info.agent as { result?: Record<string, unknown> } | undefined)?.result;
+      this.selOs = String(agent?.["pretty-name"] ?? agent?.name ?? info.ostype ?? "");
+    } catch { this.selOs = ""; }
+  }
+
   private async loadSnaps(): Promise<void> {
     const g = this.current();
     if (!g) return;
     this.snaps = [{ name: "Loading…" }];
     this.render();
-    try {
-      this.snaps = await this.client.snapshots(g);
-    } catch (err) {
-      this.snaps = [{ name: `Error: ${(err as Error).message}` }];
-    }
+    try { this.snaps = await this.client.snapshots(g); }
+    catch (err) { this.snaps = [{ name: `Error: ${(err as Error).message}` }]; }
     this.render();
   }
 
@@ -197,20 +270,18 @@ export class TuiApp {
       const [nodes, guests] = await Promise.all([this.client.nodes(), this.client.guests()]);
       this.nodes = nodes;
       this.guests = guests.sort((a, b) => a.vmid - b.vmid);
-      if (this.selected >= this.guests.length) this.selected = 0;
-      if (this.showSnaps) await this.loadSnaps();
-      else this.render();
-      void this.updateSelOs();
+      const n = this.rowsForView().length;
+      if (this.selected >= n) this.selected = Math.max(0, n - 1);
+      await this.loadView();
     } catch (err) {
       this.status = color.red(`Error: ${(err as Error).message}`);
       this.render();
-    } finally {
-      this.refreshing = false;
-    }
+    } finally { this.refreshing = false; }
   }
 
   private quit(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.clock) clearInterval(this.clock);
     this.out.write(ctl.showCursor + ctl.exitAlt);
     this.out.write(
       `\n  Thanks for using ${color.accent(BRAND.product)} by ${color.bold(BRAND.author)} — ${color.brightBlue(BRAND.url)}\n` +
@@ -219,14 +290,27 @@ export class TuiApp {
     process.exit(0);
   }
 
+  // ---- Filtering ----------------------------------------------------------
+
+  private filteredGuests(): Guest[] {
+    const f = this.filter.trim().toLowerCase();
+    if (!f) return this.guests;
+    return this.guests.filter((g) => g.name.toLowerCase().includes(f) || String(g.vmid).includes(f));
+  }
+
+  private rowsForView(): unknown[] {
+    switch (this.view) {
+      case "guests": return this.filteredGuests();
+      case "nodes": return this.nodes;
+      case "storage": return this.storages;
+      case "tasks": return this.tasks;
+    }
+  }
+
   // ---- Rendering ----------------------------------------------------------
 
-  private cols(): number {
-    return this.out.columns && this.out.columns > 20 ? this.out.columns : 100;
-  }
-  private rows(): number {
-    return this.out.rows && this.out.rows > 10 ? this.out.rows : 30;
-  }
+  private cols(): number { return this.out.columns && this.out.columns > 20 ? this.out.columns : 100; }
+  private rows(): number { return this.out.rows && this.out.rows > 10 ? this.out.rows : 30; }
 
   private paint(lines: string[]): void {
     const cols = this.cols();
@@ -239,7 +323,6 @@ export class TuiApp {
     this.out.write(frame);
   }
 
-  /** Build the welcome-splash lines (also used by `--splash`). */
   splashLines(cols = this.cols(), rows = this.rows()): string[] {
     const banner = ASCII_BANNER.split("\n");
     const block = [
@@ -258,17 +341,18 @@ export class TuiApp {
     return [...Array(top).fill(""), ...block.map((l) => center(l, cols))];
   }
 
-  private renderSplash(): void {
-    this.paint(this.splashLines());
-  }
+  private renderSplash(): void { this.paint(this.splashLines()); }
 
   /** Render one static main frame to a string (for `--frame`). */
-  async frame(cols = 100, rows = 30): Promise<string> {
+  async frame(cols = 100, rows = 30, view = "guests"): Promise<string> {
     this.mode = "main";
+    this.view = (VIEWS.includes(view as View) ? view : "guests") as View;
     const [nodes, guests] = await Promise.all([this.client.nodes(), this.client.guests()]);
     this.nodes = nodes;
     this.guests = guests.sort((a, b) => a.vmid - b.vmid);
-    await this.fetchSelOs(); // no render side-effect (keeps --frame output clean)
+    this.pveVersion = "8.2.4";
+    this.clusterName = "soyrage-lab";
+    await this.fetchViewData(); // no render side-effect (keeps --frame output clean)
     return this.buildMainLines(cols, rows).join("\n");
   }
 
@@ -281,25 +365,12 @@ export class TuiApp {
     const lines: string[] = [];
     lines.push(this.headerLine(cols));
     lines.push(this.resourceLine());
+    lines.push(this.tabBar(cols));
 
     const bodyHeight = Math.max(6, rows - 5);
-    const leftW = Math.max(38, Math.floor(cols * 0.46));
-    const rightW = cols - leftW - 1;
+    if (this.view === "guests") this.buildGuestsBody(lines, cols, bodyHeight);
+    else this.buildTableBody(lines, cols, bodyHeight);
 
-    const left = drawBox(
-      `Guests (${this.guests.length})`,
-      this.guestRows(leftW - 4, bodyHeight - 2),
-      leftW,
-      bodyHeight,
-    );
-    const right = drawBox(
-      this.showSnaps ? `Snapshots · ${this.current()?.name ?? ""}` : "Details",
-      this.showSnaps ? this.snapRows(rightW - 4, bodyHeight - 2) : this.detailRows(rightW - 4, bodyHeight - 2),
-      rightW,
-      bodyHeight,
-    );
-
-    for (let i = 0; i < bodyHeight; i++) lines.push(`${left[i] ?? ""} ${right[i] ?? ""}`);
     lines.push(this.footerKeys(cols));
     lines.push(this.footerBrand(cols));
     return lines;
@@ -307,14 +378,16 @@ export class TuiApp {
 
   private headerLine(cols: number): string {
     const brand = `${color.accent(color.bold("SOYRAGE"))} ${color.gray("▸")} ${color.bold("Proxmox TUI")}`;
+    const cluster = this.clusterName ? ` ${color.gray("·")} ${color.cyan(this.clusterName)}` : "";
     const badges: string[] = [];
     if (this.client.isDemo) badges.push(color.yellow(" DEMO "));
     if (this.config.readOnly) badges.push(color.brightBlue(" READ-ONLY "));
     const online = this.nodes.filter((n) => n.status === "online").length;
-    const right = `${color.gray("Nodes")} ${online}/${this.nodes.length} online`;
-    const rightAll = `${badges.join(" ")}  ${right}`;
-    const gap = Math.max(1, cols - 1 - stripLen(brand) - stripLen(rightAll) - 1);
-    return ` ${brand}${" ".repeat(gap)}${rightAll}`;
+    const clock = new Date().toTimeString().slice(0, 8);
+    const right = `${badges.join(" ")}  ${this.pveVersion ? color.gray("PVE " + this.pveVersion) + " " + color.dim("·") + " " : ""}${color.gray(clock)} ${color.dim("·")} ${color.gray("Nodes")} ${online}/${this.nodes.length}`;
+    const left = ` ${brand}${cluster}`;
+    const gap = Math.max(1, cols - 1 - stripLen(left) - stripLen(right));
+    return `${left}${" ".repeat(gap)}${right}`;
   }
 
   private resourceLine(): string {
@@ -332,21 +405,52 @@ export class TuiApp {
     return " " + seg.join(color.dim("   "));
   }
 
+  private tabBar(cols: number): string {
+    const tabs = VIEWS.map((v, i) => {
+      const label = ` ${i + 1} ${VIEW_LABEL[v]} `;
+      return v === this.view ? color.bgAccent(color.bold(label)) : color.gray(label);
+    }).join(color.dim("│"));
+    const hint = this.filter ? color.yellow(`  filter: ${this.filter}`) : "";
+    const line = ` ${tabs}${hint}`;
+    return line + " ".repeat(Math.max(0, cols - 1 - stripLen(line)));
+  }
+
+  // ---- Guests view (two columns) -----------------------------------------
+
+  private buildGuestsBody(lines: string[], cols: number, bodyHeight: number): void {
+    const leftW = Math.max(40, Math.floor(cols * 0.48));
+    const rightW = cols - leftW - 1;
+    const left = drawBox(
+      `Guests (${this.filteredGuests().length}${this.filter ? "/" + this.guests.length : ""})`,
+      this.guestRows(leftW - 4, bodyHeight - 2),
+      leftW, bodyHeight,
+    );
+    const right = drawBox(
+      this.showSnaps ? `Snapshots · ${this.current()?.name ?? ""}` : "Details",
+      this.showSnaps ? this.snapRows(rightW - 4, bodyHeight - 2) : this.detailRows(rightW - 4, bodyHeight - 2),
+      rightW, bodyHeight,
+    );
+    for (let i = 0; i < bodyHeight; i++) lines.push(`${left[i] ?? ""} ${right[i] ?? ""}`);
+  }
+
   private guestRows(width: number, height: number): string[] {
+    const list = this.filteredGuests();
     const rows: string[] = [];
-    for (let i = 0; i < this.guests.length && i < height; i++) {
-      const g = this.guests[i];
-      const dot =
-        g.status === "running" ? color.green("●") : g.status === "stopped" ? color.red("●") : color.yellow("●");
+    // Column header.
+    const nameW = Math.max(10, width - 22);
+    rows.push(color.gray(`   ${padEnd("VMID KIND NAME", nameW + 10)} ${padStart("CPU", 5)} ${padStart("MEM", 6)}`));
+    for (let i = 0; i < list.length && i < height - 1; i++) {
+      const g = list[i];
+      const dot = g.status === "running" ? color.green("●") : g.status === "stopped" ? color.red("●") : color.yellow("●");
       const kind = g.type === "qemu" ? color.brightCyan("VM") : color.magenta("CT");
       const cpu = g.status === "running" ? `${(g.cpu * 100).toFixed(1)}%` : "—";
       const mem = g.status === "running" ? bytes(g.mem) : "—";
-      const name = padEnd(`${String(g.vmid).padEnd(4)} ${kind} ${g.name}`, Math.max(10, width - 16));
-      let line = `${dot} ${name} ${padStart(cpu, 6)} ${padStart(mem, 6)}`;
+      const name = padEnd(`${String(g.vmid).padEnd(4)} ${kind} ${g.name}`, Math.max(10, width - 15));
+      let line = `${dot} ${name} ${padStart(cpu, 5)} ${padStart(mem, 6)}`;
       if (i === this.selected) line = color.bgAccent(padEnd(line, width));
       rows.push(line);
     }
-    if (rows.length === 0) rows.push(color.gray("No guests. (Try PROXMOX_MCP_DEMO=true)"));
+    if (list.length === 0) rows.push(color.gray(this.filter ? "No guests match the filter." : "No guests. (Try PROXMOX_MCP_DEMO=true)"));
     return rows;
   }
 
@@ -370,7 +474,7 @@ export class TuiApp {
       field("Memory", g.status === "running" ? `${bar(memPct, 18)} ${bytes(g.mem)}/${bytes(g.maxmem)}` : color.gray("—")),
       field("Disk", `${bar(diskPct, 18)} ${bytes(g.disk)}/${bytes(g.maxdisk)}`),
       "",
-      color.dim("Press [s] to view snapshots."),
+      color.dim("[s] snapshots   [S] start  [d] shutdown  [x] stop  [b] reboot"),
     ];
     return rows.slice(0, height).map((r) => truncate(r, width));
   }
@@ -385,11 +489,95 @@ export class TuiApp {
     });
   }
 
+  // ---- Full-width table views (nodes / storage / tasks) ------------------
+
+  private buildTableBody(lines: string[], cols: number, bodyHeight: number): void {
+    let title = VIEW_LABEL[this.view];
+    let content: string[] = [];
+    const inner = cols - 4;
+    if (this.view === "nodes") {
+      title = `Nodes (${this.nodes.length})`;
+      content = this.tableLines(
+        ["NODE", "STATUS", "CPU", "MEMORY", "UPTIME"],
+        this.nodes.map((n) => [
+          n.node, n.status,
+          `${bar(n.cpu * 100, 12)} ${(n.cpu * 100).toFixed(1)}%`,
+          `${bar(n.maxmem ? (n.mem / n.maxmem) * 100 : 0, 12)} ${bytes(n.mem)}/${bytes(n.maxmem)}`,
+          upt(n.uptime),
+        ]), inner, bodyHeight - 2,
+      );
+    } else if (this.view === "storage") {
+      title = `Storage (${this.storages.length})`;
+      content = this.tableLines(
+        ["STORAGE", "TYPE", "STATE", "CONTENT", "USAGE"],
+        this.storages.map((s) => {
+          const pct = s.total ? (s.used / s.total) * 100 : 0;
+          return [
+            s.storage, s.type, s.active ? color.green("active") : color.gray("inactive"),
+            truncate(s.content, 22),
+            `${bar(pct, 12)} ${bytes(s.used)}/${bytes(s.total)}`,
+          ];
+        }), inner, bodyHeight - 2,
+      );
+    } else if (this.view === "tasks") {
+      title = `Recent tasks (${this.tasks.length})`;
+      const now = Math.floor(Date.now() / 1000);
+      content = this.tableLines(
+        ["TYPE", "ID", "USER", "STATUS", "WHEN"],
+        this.tasks.map((t) => {
+          const end = Number(t.endtime ?? 0);
+          const st = end ? String(t.status ?? "?") : "running";
+          const statusCol = st === "OK" ? color.green("OK") : end ? color.red(truncate(st, 18)) : color.yellow("running");
+          return [
+            truncate(String(t.type ?? ""), 16), truncate(String(t.id ?? "—"), 12),
+            truncate(String(t.user ?? "—"), 16), statusCol,
+            end ? upt(now - Number(t.starttime ?? 0)) + " ago" : "—",
+          ];
+        }), inner, bodyHeight - 2,
+      );
+    }
+    const box = drawBox(title, content, cols, bodyHeight);
+    for (let i = 0; i < bodyHeight; i++) lines.push(box[i] ?? "");
+  }
+
+  /** Render a header + rows table sized to `inner` width, with selection. */
+  private tableLines(headers: string[], rows: string[][], inner: number, height: number): string[] {
+    const cols = headers.length;
+    const widths = headers.map((h, i) => Math.max(stripLen(h), ...rows.map((r) => stripLen(r[i] ?? ""))));
+    // Shrink to fit: trim the widest column until the total fits.
+    const gap = 2;
+    const totalGap = (cols - 1) * gap;
+    let sum = () => widths.reduce((a, b) => a + b, 0) + totalGap;
+    while (sum() > inner) {
+      const wi = widths.indexOf(Math.max(...widths));
+      if (widths[wi] <= 6) break;
+      widths[wi] -= 1;
+    }
+    const cell = (s: string, w: number) => padEnd(truncate(s, w), w);
+    const line = (cells: string[]) => cells.map((c, i) => cell(c ?? "", widths[i])).join(" ".repeat(gap));
+    const out: string[] = [];
+    out.push(color.gray(line(headers)));
+    out.push(color.gray("─".repeat(Math.min(inner, sum()))));
+    for (let i = 0; i < rows.length && i < height - 2; i++) {
+      let l = line(rows[i]);
+      if (i === this.selected) l = color.bgAccent(padEnd(l, inner));
+      out.push(l);
+    }
+    if (rows.length === 0) out.push(color.gray("(nothing to show)"));
+    return out;
+  }
+
+  // ---- Footers ------------------------------------------------------------
+
   private footerKeys(cols: number): string {
-    const keys = this.config.readOnly
-      ? "↑/↓ move · s snapshots · r refresh · q quit"
-      : "↑/↓ move · s snapshots · S start · d shutdown · x stop · b reboot · r refresh · q quit";
-    const status = this.status ? `  ${this.status}` : "";
+    let keys: string;
+    if (this.input === "filter") keys = `filter: ${color.bold(this.filter)}${color.dim("▏")}   ${color.gray("Enter/Esc to close")}`;
+    else if (this.input === "confirm" && this.confirm) keys = color.yellow(`Confirm ${this.confirm.kind} ${this.confirm.guest.name} (VMID ${this.confirm.guest.vmid})?  y / n`);
+    else if (this.view === "guests") keys = this.config.readOnly
+      ? "1-4 tabs · ↑/↓ move · / filter · s snapshots · r refresh · q quit"
+      : "1-4 tabs · ↑/↓ · / filter · s snap · S start · d shutdown · x stop · b reboot · r · q";
+    else keys = "1-4 tabs · ↑/↓ move · r refresh · q quit";
+    const status = this.status && this.input === "normal" ? `  ${this.status}` : "";
     return truncate(` ${color.gray(keys)}${status}`, cols);
   }
 
@@ -397,10 +585,4 @@ export class TuiApp {
     const text = `${color.accent("SoyRage Agency")} ${color.dim("·")} ${color.brightBlue(BRAND.url)} ${color.dim("·")} ${color.yellow("★")} star us ${color.dim("·")} ${color.dim("support")} ${color.brightBlue(BRAND.donate)}`;
     return " " + text + " ".repeat(Math.max(0, cols - 2 - stripLen(text)));
   }
-}
-
-/** Visible length ignoring ANSI escapes. */
-function stripLen(s: string): number {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*m/g, "").length;
 }
