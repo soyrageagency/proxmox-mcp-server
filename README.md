@@ -14,6 +14,12 @@
 
 <br/>
 
+<img src="./assets/screenshots/tui-dashboard.png" alt="Proxmox MCP Server terminal dashboard by SoyRage Agency — tabs, live gauges, guest OS, snapshots and one-key actions" width="88%">
+
+<sub>💻 The built‑in **`proxmox-mcp-tui`** terminal dashboard — tabbed views (Guests · Nodes · Storage · Tasks), live CPU/memory/disk gauges, guest **OS**, search, snapshots and one‑key actions. <a href="#-the-terminal-ui-tui">More screenshots ↓</a></sub>
+
+<br/><br/>
+
 [![CI](https://github.com/soyrageagency/proxmox-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/soyrageagency/proxmox-mcp-server/actions/workflows/ci.yml)
 [![Node](https://img.shields.io/badge/Node-%3E%3D18-3c873a?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -60,21 +66,41 @@
 
 ## ⚡ Quick install (one command)
 
-New to this? The installer clones the project, builds it, and runs a **guided setup wizard** — you just **paste your Proxmox address and API token**, it **tests the connection**, and writes everything (`.env` + Claude Desktop config) for you. You only need [Git](https://git-scm.com/) and [Node.js ≥ 18](https://nodejs.org/).
+**Never done this before? It's 3 steps and about 3 minutes.** You do **not** need to touch any config file — a friendly wizard asks you a few questions and sets up everything.
 
-**Windows (PowerShell):**
+#### ✅ Step 1 — Install the two things you need (once)
+
+- [**Node.js**](https://nodejs.org/) (click the big green “LTS” button, next‑next‑finish).
+- [**Git**](https://git-scm.com/downloads).
+
+#### ✅ Step 2 — Run one command
+
+<table>
+<tr><td><b>🪟 Windows</b><br/><sub>PowerShell</sub></td><td>
+
 ```powershell
 irm https://raw.githubusercontent.com/soyrageagency/proxmox-mcp-server/main/install.ps1 | iex
 ```
 
-**macOS / Linux:**
+</td></tr>
+<tr><td><b>🍎 macOS / 🐧 Linux</b><br/><sub>Terminal</sub></td><td>
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/soyrageagency/proxmox-mcp-server/main/install.sh | bash
 ```
 
-The wizard asks a few simple questions and looks like this:
+</td></tr>
+</table>
+
+#### ✅ Step 3 — Copy‑paste your details when the wizard asks
+
+That's it — the wizard walks you through it and **tests the connection** for you:
 
 ```text
+  This wizard sets everything up in under a minute. You'll need:
+    1. Your Proxmox web address (the one you log in to).
+    2. An API token (safest) — or your Proxmox username + password.
+
   Proxmox address (e.g. https://192.168.1.10:8006): https://10.0.0.11:8006
   Do you have an API token? (Y/n): y
   Token ID (user@realm!name, e.g. root@pam!mcp): root@pam!mcp
@@ -90,9 +116,22 @@ The wizard asks a few simple questions and looks like this:
   All set!  →  restart Claude Desktop and ask "List my Proxmox VMs."
 ```
 
-Already cloned the repo? Just run **`npm run setup`**. Don't have a token yet? See [Create a Proxmox API token](#-create-a-proxmox-api-token) (2 minutes). Want to try it with **no cluster at all**? Jump to [demo mode](#-try-it-instantly--demo-mode-no-proxmox-needed).
+**Then restart Claude Desktop and say: *“List my Proxmox VMs and containers.”*** 🎉
 
-The installer **backs up** and **merges** your existing config, so other MCP servers are preserved.
+<details><summary><b>Don't have an API token yet? (create one in ~20 seconds)</b></summary>
+
+In the Proxmox web UI: **Datacenter → Permissions → API Tokens → Add**, pick user `root@pam`, name it `mcp`, and **copy the secret** (shown once). Your token ID is `root@pam!mcp`. Full details in [Create a Proxmox API token](#-create-a-proxmox-api-token). Prefer not to now? The wizard also accepts your **username + password**.
+</details>
+
+<details><summary><b>Already cloned the repo, or want to re-run setup?</b></summary>
+
+Run **`npm run setup`** from the project folder. The installer **backs up** and **merges** your existing Claude config, so other MCP servers are preserved.
+</details>
+
+<details><summary><b>No Proxmox cluster to test with?</b></summary>
+
+Try [**demo mode**](#-try-it-instantly--demo-mode-no-proxmox-needed) — realistic fake data, no host needed.
+</details>
 
 > 💙 If this saves you time, please [**support the project on PayPal**](https://www.paypal.com/paypalme/soyrageagency) and drop a ⭐.
 

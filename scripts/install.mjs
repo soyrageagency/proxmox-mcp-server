@@ -153,8 +153,14 @@ async function wizard() {
     return a.startsWith("y");
   };
 
-  say(`${c.cyan}Let's connect to your Proxmox. Just paste your details when asked.${c.reset}`);
-  say(`${c.dim}(Press Enter to accept the [default]. You can re-run this anytime.)${c.reset}`);
+  say(`${c.bold}This wizard sets everything up in under a minute.${c.reset} You'll need:`);
+  say(`  ${c.green}1.${c.reset} Your Proxmox web address ${c.dim}(the one you log in to)${c.reset}.`);
+  say(`  ${c.green}2.${c.reset} An API token ${c.dim}(safest)${c.reset} — or your Proxmox username + password.`);
+  say();
+  say(`${c.dim}How to get a token in ~20s: Proxmox web UI → Datacenter → Permissions →${c.reset}`);
+  say(`${c.dim}   API Tokens → Add → user 'root@pam', name 'mcp', then copy the secret.${c.reset}`);
+  say();
+  say(`${c.dim}Press Enter to accept a [default]. Nothing is saved until the end. Re-run 'npm run setup' anytime.${c.reset}`);
   say();
 
   // Host
