@@ -36,5 +36,10 @@ fi
 cd "$DIR"
 echo "-> Installing dependencies..."; npm install --silent
 echo "-> Building...";               npm run build --silent
-echo "-> Configuring Claude Desktop..."
-node scripts/install.mjs
+echo "-> Starting the guided setup..."
+# Attach the terminal so the wizard can prompt even when piped via curl | bash.
+if [ -e /dev/tty ]; then
+  node scripts/install.mjs < /dev/tty
+else
+  node scripts/install.mjs --yes
+fi

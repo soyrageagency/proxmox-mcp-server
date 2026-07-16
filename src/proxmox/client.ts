@@ -125,7 +125,9 @@ export class ProxmoxClient {
       return headers;
     }
     throw new Error(
-      "No Proxmox credentials configured. Set PROXMOX_TOKEN_ID + PROXMOX_TOKEN_SECRET (recommended) or PROXMOX_USER + PROXMOX_PASSWORD.",
+      "Proxmox is not set up yet. Ask the user to run the guided installer (`npm run setup`) " +
+        "and paste their Proxmox host + API token, or to try demo mode (PROXMOX_MCP_DEMO=true) " +
+        "to explore without a real cluster.",
     );
   }
 
@@ -168,7 +170,13 @@ export class ProxmoxClient {
     path: string,
     params?: Record<string, string | number>,
   ): Promise<T> {
-    if (!this.config.host) throw new Error("PROXMOX_HOST is not configured.");
+    if (!this.config.host) {
+      throw new Error(
+        "Proxmox is not set up yet (no host). Ask the user to run the guided installer " +
+          "(`npm run setup`) and paste their Proxmox host + API token, or to try demo mode " +
+          "(PROXMOX_MCP_DEMO=true).",
+      );
+    }
     const headers = await this.authHeaders(method);
     let body: string | undefined;
     if (params && method !== "GET") {
