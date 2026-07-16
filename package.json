@@ -28,6 +28,7 @@
   ],
   "bin": {
     "proxmox-mcp-server": "dist/index.js",
+    "proxmox-mcp-tui": "dist/tui/index.js",
     "proxmox-mcp-install": "scripts/install.mjs"
   },
   "main": "dist/index.js",
@@ -44,7 +45,11 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "tui": "node dist/tui/index.js",
+    "tui:dev": "tsx src/tui/index.ts",
+    "tui:demo": "node -e \"process.env.PROXMOX_MCP_DEMO='true';import('./dist/tui/index.js')\"",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "shots": "node scripts/tui-shot.mjs",
     "setup": "npm run build && node scripts/install.mjs",
     "install:claude": "node scripts/install.mjs",
     "smoke": "node scripts/smoke.mjs",
@@ -58,6 +63,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "playwright": "^1.61.1",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   }

@@ -99,4 +99,29 @@ export function registerGuestTools({ server, proxmox }: ToolContext): void {
         return ok(`Config of ${resolved.name} (VMID ${resolved.vmid}):\n\n${asJsonBlock(config)}`);
       }),
   );
+
+  server.registerTool(
+    "guest_osinfo",
+    {
+      title: "Guest OS info",
+      description:
+        "What operating system does a guest run? Returns the configured OS " +
+        "type and, for running QEMU VMs with the guest agent, the detected OS " +
+        "name/version and IP addresses. Answers 'what OS is VMID 101?'.",
+      inputSchema: {
+        guest: z.string().min(1).describe("VMID or name of the VM/container."),
+      },
+    },
+    async ({ guest }) =>
+      guard(async () => {
+        const resolved = await proxmox.resolveGuest(guest);
+        const info = await proxmox.osInfo(resolved);
+        const agent = (info.agent as { result?: Record<string, unknown> } | undefined)?.result;
+        const pretty = agent?.["pretty-name"] ?? agent?.name;
+        const header = pretty
+          ? `${resolved.name} (VMID ${resolved.vmid}) runs: ${String(pretty)}`
+          : `${resolved.name} (VMID ${resolved.vmid}) — OS type: ${String(info.ostype)}`;
+        return ok(`${header}\n\n${asJsonBlock(info)}`);
+      }),
+  );
 }

@@ -96,4 +96,39 @@ export function registerLifecycleTools(ctx: ToolContext): void {
         return ok(`Reboot requested for ${g.name} (VMID ${g.vmid}).`);
       }),
   );
+
+  server.registerTool(
+    "suspend_guest",
+    {
+      title: "Suspend guest",
+      description:
+        "Suspend (pause) a running VM — freezes it in RAM so it can be resumed " +
+        "instantly. Set `toDisk` to hibernate to disk instead.",
+      inputSchema: {
+        ...guestArg,
+        toDisk: z.boolean().optional().describe("Hibernate to disk (QEMU) instead of pausing in RAM."),
+      },
+    },
+    async ({ guest, toDisk }) =>
+      guard(async () => {
+        const g = await proxmox.resolveGuest(guest);
+        await proxmox.post(`${proxmox.guestBase(g)}/status/suspend`, toDisk ? { todisk: 1 } : undefined);
+        return ok(`Suspend requested for ${g.name} (VMID ${g.vmid}).`);
+      }),
+  );
+
+  server.registerTool(
+    "resume_guest",
+    {
+      title: "Resume guest",
+      description: "Resume a suspended/paused VM.",
+      inputSchema: guestArg,
+    },
+    async ({ guest }) =>
+      guard(async () => {
+        const g = await proxmox.resolveGuest(guest);
+        await proxmox.post(`${proxmox.guestBase(g)}/status/resume`);
+        return ok(`Resume requested for ${g.name} (VMID ${g.vmid}).`);
+      }),
+  );
 }

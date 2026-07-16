@@ -366,6 +366,35 @@ export class ProxmoxClient {
     if (this.demo) return Promise.resolve(demoSnapshots(guest));
     return this.get<Array<Record<string, unknown>>>(`${this.guestBase(guest)}/snapshot`);
   }
+
+  /**
+   * Operating-system info for a guest: the configured `ostype` plus, for
+   * running QEMU VMs with the guest agent, the detected OS and IP addresses.
+   */
+  async osInfo(guest: Guest): Promise<Record<string, unknown>> {
+    if (this.demo) return demoOsInfo(guest);
+    const config = await this.guestConfig(guest);
+    const result: Record<string, unknown> = {
+      vmid: guest.vmid,
+      name: guest.name,
+      type: guest.type,
+      ostype: config.ostype ?? "unknown",
+    };
+    if (guest.type === "qemu" && guest.status === "running") {
+      // Requires the QEMU guest agent to be installed and enabled.
+      try {
+        result.agent = await this.get(`${this.guestBase(guest)}/agent/get-osinfo`);
+      } catch {
+        result.agentNote = "QEMU guest agent not available (install/enable it for live OS info).";
+      }
+      try {
+        result.interfaces = await this.get(`${this.guestBase(guest)}/agent/network-get-interfaces`);
+      } catch {
+        /* interfaces are best-effort */
+      }
+    }
+    return result;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -483,6 +512,41 @@ function demoTasks(): Array<Record<string, unknown>> {
     { type: "vncproxy", id: "100", user: "admin@pve", status: "OK", starttime: now - 14400, endtime: now - 14395 },
     { type: "vzdump", id: "200", user: "root@pam", status: "OK", starttime: now - 90000, endtime: now - 89700 },
   ];
+}
+
+const DEMO_OS: Record<string, string> = {
+  web: "Debian GNU/Linux 12 (bookworm)",
+  db: "Debian GNU/Linux 12 (bookworm)",
+  "windows-rdp": "Windows 11 Pro",
+  "nginx-proxy": "Alpine Linux v3.20",
+  grafana: "Ubuntu 24.04 LTS",
+  pihole: "Debian GNU/Linux 12 (bookworm)",
+  "backup-runner": "Debian GNU/Linux 12 (bookworm)",
+};
+
+function demoOsInfo(guest: Guest): Record<string, unknown> {
+  const pretty = DEMO_OS[guest.name] ?? "Debian GNU/Linux 12 (bookworm)";
+  const isWin = /windows/i.test(pretty);
+  const ostype = guest.type === "lxc" ? "debian" : isWin ? "win11" : "l26";
+  const info: Record<string, unknown> = { vmid: guest.vmid, name: guest.name, type: guest.type, ostype };
+  if (guest.status === "running") {
+    info.agent = {
+      result: {
+        name: isWin ? "Microsoft Windows" : pretty.split(" ")[0],
+        "pretty-name": pretty,
+        "kernel-release": isWin ? "10.0.22631" : "6.8.12-1-pve",
+        machine: "x86_64",
+      },
+    };
+    info.interfaces = {
+      result: [
+        { name: guest.type === "lxc" ? "eth0" : isWin ? "Ethernet" : "ens18", "ip-addresses": [{ "ip-address": `10.0.0.${guest.vmid}`, "ip-address-type": "ipv4" }] },
+      ],
+    };
+  } else {
+    info.agentNote = "Guest is not running.";
+  }
+  return info;
 }
 
 function demoSnapshots(guest: Guest): Array<Record<string, unknown>> {
