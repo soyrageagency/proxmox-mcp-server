@@ -403,6 +403,28 @@ export class ProxmoxClient {
     }
     return result;
   }
+
+  /** List the content of a storage (backups, ISOs, templates, disks…). */
+  storageContent(node: string, storage: string, content?: string): Promise<Array<Record<string, unknown>>> {
+    if (this.demo) return Promise.resolve(demoStorageContent(content));
+    const q = content ? `?content=${encodeURIComponent(content)}` : "";
+    return this.get<Array<Record<string, unknown>>>(`/nodes/${node}/storage/${storage}/content${q}`);
+  }
+
+  /** Storages on a node that can hold backups. */
+  async backupStorages(node: string): Promise<string[]> {
+    if (this.demo) return ["nas-backups"];
+    const s = await this.storage(node);
+    return s.filter((x) => String(x.content ?? "").includes("backup")).map((x) => String(x.storage));
+  }
+
+  /** Resolve a node name, defaulting to the first cluster node. */
+  async resolveNode(node?: string): Promise<string> {
+    if (node) return node;
+    const nodes = await this.nodes();
+    if (nodes.length === 0) throw new Error("No Proxmox nodes found.");
+    return nodes[0].node;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -555,6 +577,28 @@ function demoOsInfo(guest: Guest): Record<string, unknown> {
     info.agentNote = "Guest is not running.";
   }
   return info;
+}
+
+function demoStorageContent(content?: string): Array<Record<string, unknown>> {
+  const now = Math.floor(Date.now() / 1000);
+  const backups = [
+    { volid: "nas-backups:backup/vzdump-qemu-101-2026_07_16-03_00_04.vma.zst", content: "backup", format: "vma.zst", size: 21_495_808_000, vmid: 101, ctime: now - 3600 },
+    { volid: "nas-backups:backup/vzdump-lxc-201-2026_07_16-03_02_10.tar.zst", content: "backup", format: "tar.zst", size: 3_650_000_000, vmid: 201, ctime: now - 3300 },
+    { volid: "nas-backups:backup/vzdump-qemu-100-2026_07_15-03_00_00.vma.zst", content: "backup", format: "vma.zst", size: 12_800_000_000, vmid: 100, ctime: now - 90000 },
+  ];
+  const templates = [
+    { volid: "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst", content: "vztmpl", size: 130_000_000 },
+    { volid: "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst", content: "vztmpl", size: 145_000_000 },
+    { volid: "local:vztmpl/alpine-3.20-default_20240908_amd64.tar.xz", content: "vztmpl", size: 3_400_000 },
+  ];
+  const isos = [
+    { volid: "local:iso/debian-12.7.0-amd64-netinst.iso", content: "iso", size: 660_000_000 },
+    { volid: "local:iso/ubuntu-24.04.1-live-server-amd64.iso", content: "iso", size: 2_800_000_000 },
+  ];
+  if (content === "backup") return backups;
+  if (content === "vztmpl") return templates;
+  if (content === "iso") return isos;
+  return [...backups, ...templates, ...isos];
 }
 
 function demoSnapshots(guest: Guest): Array<Record<string, unknown>> {

@@ -24,6 +24,8 @@ import { registerTaskTools } from "./tools/tasks.js";
 import { registerSnapshotTools } from "./tools/snapshots.js";
 import { registerLifecycleTools } from "./tools/lifecycle.js";
 import { registerManagementTools } from "./tools/management.js";
+import { registerBackupTools } from "./tools/backups.js";
+import { registerProvisioningTools } from "./tools/provisioning.js";
 
 /** High-level grouping used for docs. */
 export type PluginCategory =
@@ -35,7 +37,9 @@ export type PluginCategory =
   | "cluster"
   | "snapshots"
   | "lifecycle"
-  | "management";
+  | "management"
+  | "backups"
+  | "provisioning";
 
 /** A self-contained capability group that can be toggled on or off. */
 export interface ToolPlugin {
@@ -122,6 +126,22 @@ export const BUILTIN_PLUGINS: readonly ToolPlugin[] = Object.freeze([
     category: "management",
     mutating: true,
     register: registerManagementTools,
+  },
+  {
+    name: "backups",
+    title: "Backups (vzdump)",
+    description: "List backup archives and (unless read-only) restore them.",
+    category: "backups",
+    mutating: true,
+    register: registerBackupTools,
+  },
+  {
+    name: "provisioning",
+    title: "Provisioning",
+    description: "List templates/ISOs and (unless read-only) create VMs and containers.",
+    category: "provisioning",
+    mutating: true,
+    register: registerProvisioningTools,
   },
 ]);
 

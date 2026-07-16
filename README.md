@@ -113,7 +113,9 @@ Point any MCP‑capable assistant at it and you can operate your virtualization 
 | 🧭 **Cluster** | List nodes with load, node status, cluster quorum/membership, and a consolidated `cluster_resources` view. |
 | 🖥️ **Guests** | List QEMU **VMs** and **LXC** containers (filter by kind / running), live status, full config, and **guest OS** (via the QEMU agent — name, version, IPs). |
 | ⚙️ **Lifecycle** | Start · graceful **shutdown** · hard **stop** · reboot · **suspend/resume** — for VMs and containers. |
-| 🚚 **Management** | **Migrate** to another node · **clone** (from templates) · **resize** CPU/RAM · **backup** (vzdump) · **delete**. |
+| 🚚 **Management** | **Migrate** to another node · **clone** (from templates) · **resize** CPU/RAM · **delete**. |
+| 📦 **Backups** | **Backup** (vzdump) · **list** archives · **restore** into a VMID. |
+| 🧱 **Provisioning** | **List templates/ISOs** · **create** LXC containers and QEMU VMs. |
 | 📸 **Snapshots** | List, **create** (optionally with RAM), **rollback** and **delete** snapshots. |
 | 💾 **Storage** | List storages per node with type, content and usage. |
 | 🧾 **Tasks** | Recent task log per node (backups, migrations, actions…). |
@@ -355,6 +357,8 @@ Guests are addressed by **VMID or name**.
 | `cluster_status` | — | Cluster membership & quorum. |
 | `cluster_resources` | `type?` | Consolidated nodes/guests/storage view. |
 | `list_snapshots` | `guest` | Snapshots of a VM/container. |
+| `list_backups` | `node?`, `storage?` | vzdump backup archives with VMID, size, age. |
+| `list_templates` | `node?` | Container templates (vztmpl) and install ISOs. |
 
 ### Lifecycle (**W**)
 
@@ -376,6 +380,14 @@ Guests are addressed by **VMID or name**.
 | `set_guest_resources` | `guest`, `cores?`, `memory?` | Quickly change CPU cores / RAM (MB). |
 | `backup_guest` | `guest`, `storage`, `mode?`, `compress?` | Create a vzdump backup to a storage. |
 | `delete_guest` | `guest`, `confirm`, `purge?` | Destroy a guest (guarded: `confirm` must equal the VMID). |
+
+### Backups & provisioning (**W**)
+
+| Tool | Parameters | Description |
+| --- | --- | --- |
+| `restore_backup` | `volid`, `vmid`, `node?`, `storage?`, `force?` | Restore a vzdump archive into a VMID. |
+| `create_container` | `vmid`, `ostemplate`, `storage`, `hostname?`, `cores?`, `memory?`, `diskGb?`, … | Create an LXC container from a template. |
+| `create_vm` | `vmid`, `storage`, `name?`, `diskGb?`, `cores?`, `memory?`, `iso?`, `ostype?`, … | Create a QEMU VM (with a disk + optional install ISO). |
 
 ### Snapshots (**W**)
 
@@ -418,6 +430,8 @@ The server is assembled from independent **plugins**, each owning one capability
 | `snapshots` | snapshots | read/write | `list_snapshots`, `create/rollback/delete_snapshot` |
 | `lifecycle` | lifecycle | write | `start/shutdown/stop/reboot/suspend/resume_guest` |
 | `management` | management | write | `migrate/clone/backup/delete_guest`, `set_guest_resources` |
+| `backups` | backups | read/write | `list_backups`, `restore_backup` |
+| `provisioning` | provisioning | read/write | `list_templates`, `create_container`, `create_vm` |
 
 ```bash
 PROXMOX_MCP_PLUGINS=                                # (env) empty = load all
@@ -497,10 +511,11 @@ No. The server talks only to your Proxmox API and your MCP client over local std
 - [x] Nodes, guests, lifecycle, snapshots, storage, tasks, cluster
 - [x] Guest **OS** detection (QEMU agent) · suspend/resume
 - [x] **Migrate**, **clone**, **resize**, **backup** (vzdump), **delete** guests
-- [x] API‑token & ticket auth · read‑only & allowlist · modular plugins
+- [x] **Backups**: list & **restore** archives · **Provisioning**: create VMs/CTs from templates & ISOs
+- [x] Guided setup wizard · API‑token & ticket auth · read‑only & allowlist · modular plugins
 - [x] One‑command installer · demo mode · terminal UI (TUI) · CI
-- [ ] Backup **restore** & scheduled backup jobs
-- [ ] VM/CT **create** from ISO/template
+- [ ] Scheduled backup jobs & backup pruning
+- [ ] Cloud‑init provisioning presets
 - [ ] Published npm package for one‑line `npx` usage
 
 ---
