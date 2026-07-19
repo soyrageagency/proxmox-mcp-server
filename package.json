@@ -5,7 +5,14 @@
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
   "author": "SoyRage Agency (https://soyrage.es/)",
-  "homepage": "https://soyrage.es/",
+  "homepage": "https://github.com/soyrageagency/proxmox-mcp-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soyrageagency/proxmox-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/soyrageagency/proxmox-mcp-server/issues"
+  },
   "funding": {
     "type": "paypal",
     "url": "https://www.paypal.com/paypalme/soyrageagency"
@@ -43,6 +50,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "tui": "node dist/tui/index.js",

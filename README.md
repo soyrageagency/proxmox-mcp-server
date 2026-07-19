@@ -580,6 +580,18 @@ No. The server talks only to your Proxmox API and your MCP client over local std
 
 ---
 
+## 🧰 More from the SoyRage self‑hosting suite
+
+Proxmox MCP Server is part of a family of open‑source infrastructure tools built with the same care — same design language, same safety‑first defaults, same "chat with your infra" philosophy:
+
+| Project | What it does |
+| --- | --- |
+| 🖧 **[Proxmox MCP Server](https://github.com/soyrageagency/proxmox-mcp-server)** | *(you are here)* Chat with your Proxmox VE cluster — nodes, VMs & LXC, snapshots and full guest CRUD, plus a tabbed terminal dashboard with an AI command bar. |
+| 🐳 **[Docker MCP Server](https://github.com/soyrageagency/docker-mcp-server)** | Chat with your Docker host — containers, logs, Compose, a live web panel and a TUI with an AI copilot. |
+| 🚚 **[VMware → Proxmox Toolkit (V2P)](https://github.com/soyrageagency/vmware-to-proxmox)** | Leaving vSphere after the Broadcom price hikes? Inventory vCenter, score compatibility, estimate cost & time, plan disk conversion and export a professional PDF assessment. |
+
+---
+
 ## 💙 Support the project
 
 Proxmox MCP Server is built and maintained in the open by **SoyRage Agency**. If it's useful, please consider supporting continued development — it funds new features and keeps the project free.
