@@ -275,41 +275,42 @@ export function renderHtml(r: ResilienceReport): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>${esc(r.title)}</title>
 <style>
-  :root{--accent:${accent}}
+  :root{--accent:${accent};--ink:#111;--mute:#8b8b86;--line:#e7e3da;--bg:#f3f1ea;--grid:rgba(17,17,17,.035)}
   *{box-sizing:border-box}
-  body{font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1b2430;margin:0;background:#eef2f7}
-  .page{max-width:900px;margin:0 auto;background:#fff;box-shadow:0 2px 24px rgba(20,40,80,.08)}
-  header{background:linear-gradient(120deg,#0d1017,#17415f);color:#fff;padding:34px 40px}
-  header .brand{font-weight:700;letter-spacing:.14em;color:var(--accent);font-size:12px}
-  header h1{margin:.3em 0 .1em;font-size:24px}
-  .pill{display:inline-block;color:#fff;border-radius:999px;padding:2px 12px;font-size:12px;font-weight:700;letter-spacing:.04em}
-  main{padding:28px 40px 40px}
-  h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:#5a6b82;border-bottom:2px solid #eef2f7;padding-bottom:6px;margin-top:32px}
+  body{font:14px/1.55 Inter,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);margin:0;
+    background-color:var(--bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:46px 46px}
+  .page{max-width:900px;margin:28px auto;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  header{padding:30px 40px 24px;border-bottom:1px solid var(--line)}
+  header .brand{font-weight:800;letter-spacing:.12em;color:var(--accent);font-size:11.5px}
+  header h1{margin:.45em 0 .35em;font-size:26px;font-weight:800;letter-spacing:-.03em}
+  .pill{display:inline-block;color:#fff;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;letter-spacing:.03em}
+  main{padding:26px 40px 40px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:30px;font-weight:700}
   h3{font-size:15px;margin:.4em 0}
-  .muted{color:#66768c}
-  code{background:#f2f5fa;border-radius:4px;padding:1px 5px;font-size:12px}
+  .muted{color:var(--mute)}
+  code{background:#f2f0ea;border-radius:5px;padding:1px 5px;font-size:12px}
   code.wrap{word-break:break-all}
-  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}
-  .meta div{background:#f6f9fc;border:1px solid #e6ecf4;border-radius:10px;padding:12px 14px;color:#1b2430}
-  .meta span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8494a8}
-  .meta strong{font-size:17px}
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}
+  .meta div{background:#faf9f5;border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--ink)}
+  .meta span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#a7a299;font-weight:700}
+  .meta strong{font-size:17px;font-weight:800;letter-spacing:-.02em}
   table{width:100%;border-collapse:collapse;margin:10px 0}
-  table.grid th,table.grid td{border-bottom:1px solid #eef2f7;padding:7px 8px;text-align:left;font-size:13px}
-  table.grid th{color:#5a6b82;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-  table.checks td{padding:4px 8px;border-bottom:1px solid #f4f7fb}
+  table.grid th,table.grid td{border-bottom:1px solid #f0ede5;padding:7px 8px;text-align:left;font-size:13px}
+  table.grid th{color:var(--mute);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+  table.checks td{padding:4px 8px;border-bottom:1px solid #f4f2ec}
   table.checks td.g{width:20px;font-weight:700}
-  table.kv td{padding:5px 8px;border-bottom:1px solid #f4f7fb;vertical-align:top}
-  table.kv td:first-child{color:#66768c;width:150px}
-  .card{border:1px solid #e6ecf4;border-radius:12px;padding:14px 16px;margin:12px 0;background:#fbfdff}
-  pre{background:#0d1017;color:#c7d2e0;padding:12px;border-radius:8px;overflow:auto;font-size:11px}
-  footer{padding:20px 40px;border-top:1px solid #eef2f7;color:#66768c;font-size:12px;display:flex;justify-content:space-between}
+  table.kv td{padding:5px 8px;border-bottom:1px solid #f4f2ec;vertical-align:top}
+  table.kv td:first-child{color:var(--mute);width:150px}
+  .card{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0;background:#fbfaf6}
+  pre{background:#111;color:#c7d2e0;padding:12px;border-radius:8px;overflow:auto;font-size:11px}
+  footer{padding:20px 40px;border-top:1px solid var(--line);color:var(--mute);font-size:12px;display:flex;justify-content:space-between}
   a{color:var(--accent)}
-  @media print{body{background:#fff}.page{box-shadow:none}}
+  @media print{body{background:#fff}.page{border:none}}
 </style></head><body><div class="page">
   <header>
     <div class="brand">SOYRAGE AGENCY · RESILIENCE EVIDENCE</div>
     <h1>${esc(r.title)}</h1>
-    <div>${pill(r.outcome)} &nbsp;<span class="muted" style="color:#c7d2e0">Report ID ${esc(r.id)}${r.demo ? " · demo data" : ""}</span></div>
+    <div>${pill(r.outcome)} &nbsp;<span class="muted">Report ID ${esc(r.id)}${r.demo ? " · demo data" : ""}</span></div>
     <div class="meta">
       <div><span>Started</span><strong style="font-size:13px">${esc(r.startedAt.replace("T", " ").slice(0, 19))}</strong></div>
       <div><span>Finished</span><strong style="font-size:13px">${esc(r.finishedAt.replace("T", " ").slice(0, 19))}</strong></div>
