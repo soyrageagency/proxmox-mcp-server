@@ -93,17 +93,47 @@ async function shoot(browser, ansi, out) {
   console.log(`saved ${out}`);
 }
 
+/** Screenshot a full standalone HTML document (e.g. a signed evidence report). */
+async function shootDoc(browser, html, out, width = 940) {
+  const htmlPath = resolve("assets/screenshots/_doc.html");
+  writeFileSync(htmlPath, html);
+  const p = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 2 });
+  await p.goto(pathToFileURL(htmlPath).href, { waitUntil: "load" });
+  await p.screenshot({ path: out, fullPage: true });
+  await p.close();
+  rmSync(htmlPath, { force: true });
+  console.log(`saved ${out}`);
+}
+
 mkdirSync("assets/screenshots", { recursive: true });
 const env = { ...process.env, PROXMOX_MCP_DEMO: "true", FORCE_COLOR: "3" };
 const frame = execSync("node dist/tui/index.js --frame", { env, encoding: "utf8" });
 const storage = execSync("node dist/tui/index.js --frame --view=storage", { env, encoding: "utf8" });
+const resilience = execSync("node dist/tui/index.js --frame --view=resilience", { env, encoding: "utf8" });
 const ai = execSync("node dist/tui/index.js --frame --overlay=ai", { env, encoding: "utf8" });
 const splash = execSync("node dist/tui/index.js --splash", { env, encoding: "utf8" });
+
+// Build a signed evidence report (HTML) in-process for a documentation shot.
+process.env.PROXMOX_MCP_DEMO = "true";
+process.env.PROXMOX_MCP_RESILIENCE_DIR = resolve("assets/screenshots/_reports_tmp");
+const url = (p) => pathToFileURL(resolve(p)).href;
+const { loadConfig } = await import(url("dist/config.js"));
+const { Logger } = await import(url("dist/logger.js"));
+const { ProxmoxClient } = await import(url("dist/proxmox/client.js"));
+const { ResilienceEngine } = await import(url("dist/resilience/engine.js"));
+const { renderHtml } = await import(url("dist/resilience/report.js"));
+const cfg = loadConfig();
+const engine = new ResilienceEngine({ client: new ProxmoxClient(cfg, new Logger("error")), config: cfg, logger: new Logger("error") });
+const reports = await engine.recentReports();
+const bvReport = reports.find((r) => r.capability === "backup-verify");
 
 const browser = await chromium.launch();
 await shoot(browser, splash, "assets/screenshots/tui-welcome.png");
 await shoot(browser, frame, "assets/screenshots/tui-dashboard.png");
 await shoot(browser, storage, "assets/screenshots/tui-storage.png");
+await shoot(browser, resilience, "assets/screenshots/tui-resilience.png");
 await shoot(browser, ai, "assets/screenshots/tui-ai.png");
+if (bvReport) await shootDoc(browser, renderHtml(bvReport), "assets/screenshots/evidence-report.png");
 await browser.close();
 rmSync("assets/screenshots/_tmp.html", { force: true });
+rmSync(resolve("assets/screenshots/_reports_tmp"), { recursive: true, force: true });

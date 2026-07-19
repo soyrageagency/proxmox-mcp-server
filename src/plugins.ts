@@ -26,6 +26,7 @@ import { registerLifecycleTools } from "./tools/lifecycle.js";
 import { registerManagementTools } from "./tools/management.js";
 import { registerBackupTools } from "./tools/backups.js";
 import { registerProvisioningTools } from "./tools/provisioning.js";
+import { registerResilienceTools } from "./tools/resilience.js";
 
 /** High-level grouping used for docs. */
 export type PluginCategory =
@@ -39,7 +40,8 @@ export type PluginCategory =
   | "lifecycle"
   | "management"
   | "backups"
-  | "provisioning";
+  | "provisioning"
+  | "resilience";
 
 /** A self-contained capability group that can be toggled on or off. */
 export interface ToolPlugin {
@@ -142,6 +144,17 @@ export const BUILTIN_PLUGINS: readonly ToolPlugin[] = Object.freeze([
     category: "provisioning",
     mutating: true,
     register: registerProvisioningTools,
+  },
+  {
+    name: "resilience",
+    title: "Resilience & Compliance",
+    description:
+      "Automated backup verification (restore-testing), patch orchestration with " +
+      "automatic rollback, and scheduled DR drills — each producing signed, dated " +
+      "ISO 27001 / NIS2 / DORA evidence reports.",
+    category: "resilience",
+    mutating: true,
+    register: registerResilienceTools,
   },
 ]);
 

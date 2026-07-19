@@ -15,6 +15,10 @@
 import { BRAND, ASCII_BANNER } from "../branding.js";
 import type { AppConfig } from "../config.js";
 import type { ProxmoxClient, Guest, NodeSummary } from "../proxmox/client.js";
+import { Logger } from "../logger.js";
+import { ResilienceEngine, DEMO_RUNBOOK } from "../resilience/engine.js";
+import { dur, summarize } from "../resilience/report.js";
+import type { BackupVerifyReport, DrReport, Outcome, PatchReport, ResilienceReport } from "../resilience/types.js";
 import { bar, center, color, ctl, padEnd, padStart, truncate } from "./ansi.js";
 import { drawBox } from "./box.js";
 
@@ -43,11 +47,12 @@ function stripLen(s: string): number {
 }
 
 type Mode = "splash" | "main";
-type View = "guests" | "nodes" | "storage" | "tasks";
+type View = "guests" | "nodes" | "storage" | "tasks" | "resilience";
 type Input = "normal" | "filter" | "confirm" | "ai" | "message";
 type Pending = { label: string; run: () => Promise<void> };
-const VIEWS: View[] = ["guests", "nodes", "storage", "tasks"];
-const VIEW_LABEL: Record<View, string> = { guests: "Guests", nodes: "Nodes", storage: "Storage", tasks: "Tasks" };
+const VIEWS: View[] = ["guests", "nodes", "storage", "tasks", "resilience"];
+const VIEW_LABEL: Record<View, string> = { guests: "Guests", nodes: "Nodes", storage: "Storage", tasks: "Tasks", resilience: "Resilience" };
+const CAP_LABEL: Record<string, string> = { "backup-verify": "Backup verification", "patch-orchestrate": "Patch + auto-rollback", "dr-drill": "DR drill" };
 
 interface StorageRow { node: string; storage: string; type: string; used: number; total: number; active: boolean; content: string; }
 
@@ -75,13 +80,17 @@ export class TuiApp {
   private timer: NodeJS.Timeout | null = null;
   private clock: NodeJS.Timeout | null = null;
   private refreshing = false;
+  private resilience: ResilienceReport[] = [];
+  private engine: ResilienceEngine;
 
   constructor(
     private readonly client: ProxmoxClient,
     private readonly config: AppConfig,
     private readonly out = process.stdout,
     private readonly inp = process.stdin,
-  ) {}
+  ) {
+    this.engine = new ResilienceEngine({ client, config, logger: new Logger("error", "tui") });
+  }
 
   async start(): Promise<void> {
     this.out.write(ctl.enterAlt + ctl.hideCursor + ctl.clear);
@@ -115,7 +124,9 @@ export class TuiApp {
       case "2": return this.setView("nodes");
       case "3": return this.setView("storage");
       case "4": return this.setView("tasks");
+      case "5": return this.setView("resilience");
       case "\t": return this.setView(VIEWS[(VIEWS.indexOf(this.view) + 1) % VIEWS.length]);
+      case "g": if (this.view === "resilience") return this.requestResilienceRun(); return;
       case "\x1b[A": case "k": return this.move(-1);
       case "\x1b[B": case "j": return this.move(1);
       case "r": this.status = "Refreshing…"; return void this.refresh();
@@ -197,12 +208,16 @@ export class TuiApp {
   private helpText(): string {
     return [
       color.gray("Navigation"),
-      "  1-4 / Tab    switch view (Guests · Nodes · Storage · Tasks)",
+      "  1-5 / Tab    switch view (Guests · Nodes · Storage · Tasks · Resilience)",
       "  ↑/↓  j/k     move selection      /  filter guests",
       "",
       color.gray("Actions (Guests)"),
       "  S  start     d  shutdown     x  stop     b  reboot",
       "  s  snapshots of the selected guest",
+      "",
+      color.gray("Resilience & Compliance"),
+      "  g  run the selected capability (backup verify · patch · DR drill)",
+      "     each run writes signed ISO 27001 / NIS2 / DORA evidence.",
       "",
       color.gray("AI copilot"),
       `  ${color.accent("a")}  or  ${color.accent(":")}    give an order in plain language, e.g.:`,
@@ -322,6 +337,8 @@ export class TuiApp {
       } else if (this.view === "tasks") {
         const node = this.nodes[0]?.node;
         this.tasks = node ? await this.client.tasks(node, 30) : [];
+      } else if (this.view === "resilience") {
+        this.resilience = this.orderResilience(await this.engine.recentReports());
       } else if (this.view === "guests") {
         await this.fetchSelOs();
       }
@@ -393,6 +410,41 @@ export class TuiApp {
       case "nodes": return this.nodes;
       case "storage": return this.storages;
       case "tasks": return this.tasks;
+      case "resilience": return this.resilience;
+    }
+  }
+
+  // ---- Resilience ---------------------------------------------------------
+
+  /** Order reports as Backup verify · Patch · DR drill for a stable list. */
+  private orderResilience(reports: ResilienceReport[]): ResilienceReport[] {
+    const order: Record<string, number> = { "backup-verify": 0, "patch-orchestrate": 1, "dr-drill": 2 };
+    return [...reports].sort((a, b) => order[a.capability] - order[b.capability]);
+  }
+
+  private requestResilienceRun(): void {
+    const r = this.resilience[this.selected];
+    if (!r) return;
+    if (this.config.readOnly) { this.status = color.yellow("Read-only mode — resilience runs are disabled."); this.render(); return; }
+    const label = `Run ${CAP_LABEL[r.capability] ?? r.capability} now`;
+    this.pending = { label, run: () => this.runResilience(r.capability) };
+    this.input = "confirm";
+    this.render();
+  }
+
+  private async runResilience(capability: string): Promise<void> {
+    try {
+      this.status = color.gray(`Running ${CAP_LABEL[capability] ?? capability}…`);
+      this.render();
+      if (capability === "backup-verify") await this.engine.verifyBackups({});
+      else if (capability === "patch-orchestrate") await this.engine.orchestratePatching({});
+      else await this.engine.runDrillObject(DEMO_RUNBOOK);
+      this.resilience = this.orderResilience(await this.engine.recentReports());
+      this.status = color.green(`✓ ${CAP_LABEL[capability] ?? capability} — signed evidence written`);
+      this.render();
+    } catch (err) {
+      this.status = color.red(`✗ ${(err as Error).message}`);
+      this.render();
     }
   }
 
@@ -460,6 +512,7 @@ export class TuiApp {
 
     const bodyHeight = Math.max(6, rows - 5);
     if (this.view === "guests") this.buildGuestsBody(lines, cols, bodyHeight);
+    else if (this.view === "resilience") this.buildResilienceBody(lines, cols, bodyHeight);
     else this.buildTableBody(lines, cols, bodyHeight);
 
     lines.push(this.footerKeys(cols));
@@ -581,6 +634,94 @@ export class TuiApp {
     });
   }
 
+  // ---- Resilience view (two columns) -------------------------------------
+
+  private buildResilienceBody(lines: string[], cols: number, bodyHeight: number): void {
+    const leftW = Math.max(38, Math.floor(cols * 0.42));
+    const rightW = cols - leftW - 1;
+    const sel = this.resilience[this.selected];
+    const left = drawBox(
+      "Resilience & Compliance",
+      this.resilienceRows(leftW - 4, bodyHeight - 2),
+      leftW, bodyHeight,
+    );
+    const right = drawBox(
+      sel ? `Evidence · ${sel.title}` : "Evidence",
+      this.resilienceDetail(rightW - 4, bodyHeight - 2),
+      rightW, bodyHeight,
+    );
+    for (let i = 0; i < bodyHeight; i++) lines.push(`${left[i] ?? ""} ${right[i] ?? ""}`);
+  }
+
+  private outcomeDot(o: Outcome): string {
+    return o === "pass" ? color.green("●") : o === "warn" ? color.yellow("●") : o === "fail" ? color.red("●") : color.gray("●");
+  }
+
+  private outcomeBadge(o: Outcome): string {
+    const t = o.toUpperCase();
+    return o === "pass" ? color.green(t) : o === "warn" ? color.yellow(t) : o === "fail" ? color.red(t) : color.gray(t);
+  }
+
+  private resilienceRows(width: number, height: number): string[] {
+    const rows: string[] = [];
+    rows.push(color.gray("  Capability · what it proves"));
+    for (let i = 0; i < this.resilience.length; i++) {
+      const r = this.resilience[i];
+      const s = summarize(r);
+      const label = CAP_LABEL[r.capability] ?? r.capability;
+      const head = `${this.outcomeDot(r.outcome)} ${color.bold(padEnd(label, Math.max(10, width - 8)))} ${this.outcomeBadge(r.outcome)}`;
+      rows.push(i === this.selected ? color.bgAccent(padEnd(head, width)) : head);
+      rows.push(color.gray(`   ${truncate(s.metric, width - 4)}`));
+    }
+    rows.push("");
+    rows.push(color.dim("  [g] run selected   [↑/↓] move"));
+    return rows.slice(0, height);
+  }
+
+  private resilienceDetail(width: number, height: number): string[] {
+    const r = this.resilience[this.selected];
+    if (!r) return [color.gray("Select a capability.")];
+    const line = (s: string) => truncate(s, width);
+    const field = (k: string, v: string) => `${color.gray(padEnd(k, 10))} ${v}`;
+    const rows: string[] = [
+      field("Verdict", this.outcomeBadge(r.outcome)),
+      field("Finished", r.finishedAt.replace("T", " ").slice(0, 19)),
+      field("Duration", dur(r.durationSec)),
+      "",
+    ];
+    if (r.capability === "backup-verify") {
+      const rep = r as BackupVerifyReport;
+      rows.push(color.gray(`  Restored & health-checked in isolated ${rep.isolatedBridge}:`));
+      for (const it of rep.items) {
+        const p = it.checks.filter((c) => c.outcome === "pass").length;
+        rows.push(`  ${this.outcomeDot(it.outcome)} ${color.bold(padEnd(it.name, 14))} RTO ${padEnd(dur(it.restoreSec), 7)} ${color.gray(`${p}/${it.checks.length} checks`)}`);
+      }
+    } else if (r.capability === "patch-orchestrate") {
+      const rep = r as PatchReport;
+      rows.push(color.gray(`  Window: ${rep.window || "anytime"} · dependency-ordered:`));
+      for (const st of rep.steps) {
+        const tag = st.rolledBack ? color.yellow("rolled back") : `${st.updates} updates`;
+        rows.push(`  ${this.outcomeDot(st.outcome)} ${color.bold(padEnd(st.name, 14))} ${color.gray(`batch ${st.batch}`)} ${tag}`);
+      }
+    } else {
+      const rep = r as DrReport;
+      rows.push(field("Runbook", rep.runbook));
+      rows.push(field("Env", rep.environment));
+      rows.push(field("RTO/RPO", `${dur(rep.rtoSec)} / ${dur(rep.rpoSec)}`));
+      rows.push("");
+      for (const st of rep.steps) {
+        rows.push(`  ${this.outcomeDot(st.outcome)} ${color.bold(padEnd(st.action, 12))} ${color.gray(truncate(st.target, width - 18))}`);
+      }
+    }
+    rows.push("");
+    rows.push(color.gray("  Controls: ") + truncate(r.controls.map((c) => `${c.framework} ${c.clause}`).join(" · "), width - 12));
+    const sig = r.signature;
+    rows.push(sig
+      ? color.green("  ✓ signed ") + color.gray(`ed25519 · key ${sig.keyFingerprint.slice(0, 12)}`)
+      : color.gray("  unsigned"));
+    return rows.slice(0, height).map(line);
+  }
+
   // ---- Full-width table views (nodes / storage / tasks) ------------------
 
   private buildTableBody(lines: string[], cols: number, bodyHeight: number): void {
@@ -668,9 +809,12 @@ export class TuiApp {
     else if (this.input === "confirm" && this.pending) keys = color.yellow(`${this.pending.label}?  y / n`);
     else if (this.input === "message") keys = color.gray("press any key to dismiss");
     else if (this.view === "guests") keys = this.config.readOnly
-      ? "1-4 tabs · ↑/↓ · / filter · a AI · s snap · r · ? help · q"
-      : "1-4 · ↑/↓ · / filter · a AI · s snap · S start · d shutdown · x stop · b reboot · r · ? · q";
-    else keys = "1-4 tabs · ↑/↓ move · a AI · r refresh · ? help · q quit";
+      ? "1-5 tabs · ↑/↓ · / filter · a AI · s snap · r · ? help · q"
+      : "1-5 · ↑/↓ · / filter · a AI · s snap · S start · d shutdown · x stop · b reboot · r · ? · q";
+    else if (this.view === "resilience") keys = this.config.readOnly
+      ? "1-5 tabs · ↑/↓ move · a AI · r refresh · ? help · q quit"
+      : "1-5 tabs · ↑/↓ move · g run selected · a AI · r refresh · ? help · q";
+    else keys = "1-5 tabs · ↑/↓ move · a AI · r refresh · ? help · q quit";
     const status = this.status && this.input === "normal" ? `  ${this.status}` : "";
     return truncate(` ${color.gray(keys)}${status}`, cols);
   }

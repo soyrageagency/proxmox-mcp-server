@@ -34,6 +34,13 @@ interface FileConfig {
   logLevel?: string;
   plugins?: { enabled?: string[]; disabled?: string[] };
   ai?: { endpoint?: string; key?: string; model?: string };
+  resilience?: {
+    dir?: string;
+    signingKey?: string;
+    ephemeralVmidBase?: number;
+    isolatedBridge?: string;
+    maintenanceWindow?: string;
+  };
 }
 
 /** Read and parse the JSON config file, if present. Never throws. */
@@ -130,6 +137,29 @@ export interface AppConfig {
   readonly aiKey: string;
   /** Model name for the AI endpoint. */
   readonly aiModel: string;
+  /** Resilience & compliance (backup verify, patching, DR drills). */
+  readonly resilience: ResilienceConfig;
+}
+
+/** Settings for the resilience & compliance capabilities. */
+export interface ResilienceConfig {
+  /** Directory where signed evidence reports are written. */
+  readonly dir: string;
+  /** Path to the Ed25519 signing key (auto-generated on first use if absent). */
+  readonly signingKey: string;
+  /** First VMID of the ephemeral range used for backup-verification restores. */
+  readonly ephemeralVmidBase: number;
+  /** Isolated bridge ephemeral guests are fenced onto (no production traffic). */
+  readonly isolatedBridge: string;
+  /** Maintenance window for patching, e.g. "Sat 02:00-05:00" (empty = anytime). */
+  readonly maintenanceWindow: string;
+}
+
+function envNum(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 /** Build the configuration object. Called once from the entry point. */
@@ -172,5 +202,12 @@ export function loadConfig(): AppConfig {
     aiEndpoint: envStr("PROXMOX_MCP_AI_ENDPOINT", file.ai?.endpoint ?? ""),
     aiKey: envStr("PROXMOX_MCP_AI_KEY", file.ai?.key ?? ""),
     aiModel: envStr("PROXMOX_MCP_AI_MODEL", file.ai?.model ?? "gpt-4o-mini"),
+    resilience: Object.freeze({
+      dir: envStr("PROXMOX_MCP_RESILIENCE_DIR", file.resilience?.dir ?? "resilience-reports"),
+      signingKey: envStr("PROXMOX_MCP_SIGNING_KEY", file.resilience?.signingKey ?? ""),
+      ephemeralVmidBase: envNum("PROXMOX_MCP_EPHEMERAL_VMID_BASE", file.resilience?.ephemeralVmidBase ?? 90000),
+      isolatedBridge: envStr("PROXMOX_MCP_ISOLATED_BRIDGE", file.resilience?.isolatedBridge ?? "vmbr9"),
+      maintenanceWindow: envStr("PROXMOX_MCP_MAINT_WINDOW", file.resilience?.maintenanceWindow ?? ""),
+    }),
   });
 }

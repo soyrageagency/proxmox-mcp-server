@@ -1,0 +1,51 @@
+# ---------------------------------------------------------------------------
+# Disaster-recovery runbook (declarative).
+#
+# Run it with the Proxmox MCP resilience engine:
+#   node dist/tui/index.js            → Resilience tab → press "g"
+# or, from your AI client, call the `run_dr_drill` tool with this file's path.
+#
+# The drill executes every step against an ISOLATED test environment, times the
+# recovery, measures RTO/RPO and produces signed drill minutes ("acta") that map
+# onto ISO 27001 A.5.30, NIS2 Art. 21(2)(c) and DORA Art. 11 / 24-25.
+#
+# The engine REFUSES to run if `environment` looks like production.
+#
+# Crafted by SoyRage Agency — https://soyrage.es/
+# ---------------------------------------------------------------------------
+name: Quarterly failover drill
+environment: staging          # never "production" — the engine will refuse
+description: Restore the core stack into isolated staging and validate recovery.
+rpoHours: 24                  # data must be no older than 24h to pass
+
+steps:
+  - action: notify
+    note: DR drill starting — stakeholders informed
+
+  # Recover the database first (everything else depends on it).
+  - action: restore
+    guest: db
+    from: latest
+  - action: start
+    guest: db
+  - action: healthcheck
+    guest: db
+    check: db
+
+  # Recover the web tier.
+  - action: restore
+    guest: web
+    from: latest
+  - action: start
+    guest: web
+  - action: healthcheck
+    guest: web
+    check: http
+  - action: verify-file
+    guest: web
+    path: /etc/nginx/nginx.conf
+
+  # Prove the failover path, then clean up the isolated environment.
+  - action: failover
+    guest: web
+  - action: teardown
