@@ -82,6 +82,29 @@ async function runStep(ctx: ResilienceContext, step: RunbookStep, index: number)
   return { index, action: step.action, target, outcome, detail: note, ms: Date.now() - t0 };
 }
 
+/**
+ * Measure the real Recovery Point Objective: how old the freshest backup on the
+ * cluster is, in seconds. Returns null when nothing could be read.
+ */
+async function measureRpoSec(ctx: ResilienceContext): Promise<number | null> {
+  try {
+    const node = await ctx.client.resolveNode();
+    const now = Math.floor(Date.now() / 1000);
+    let freshest: number | null = null;
+    for (const storage of await ctx.client.backupStorages(node)) {
+      for (const item of (await ctx.client.storageContent(node, storage, "backup")) ?? []) {
+        const ctime = Number(item.ctime ?? 0);
+        if (!ctime) continue;
+        const age = Math.max(0, now - ctime);
+        if (freshest === null || age < freshest) freshest = age;
+      }
+    }
+    return freshest;
+  } catch {
+    return null;
+  }
+}
+
 /** Run a DR drill from a parsed runbook; returns an (unsigned) evidence report. */
 export async function runDrill(ctx: ResilienceContext, runbook: Runbook): Promise<DrReport> {
   const startedAt = nowIso();
@@ -91,9 +114,13 @@ export async function runDrill(ctx: ResilienceContext, runbook: Runbook): Promis
     steps.push(await runStep(ctx, runbook.steps[i], i + 1));
   }
   const rtoSec = steps.filter((s) => RTO_ACTIONS.has(s.action)).reduce((a, s) => a + s.ms / 1000, 0);
-  const rpoSec = ctx.client.isDemo ? 55 * 60 : runbook.rpoHours * 3600; // demo: ~55 min since last backup
-  const outcome = worst(steps.map((s) => s.outcome));
-  const metTarget = rpoSec <= runbook.rpoHours * 3600;
+  // RPO must be MEASURED (age of the freshest recovery point), never echoed back
+  // from the objective — otherwise the drill would always claim it met target.
+  const rpoSec = ctx.client.isDemo ? 55 * 60 : ((await measureRpoSec(ctx)) ?? -1);
+  const rpoKnown = rpoSec >= 0;
+  const metTarget = rpoKnown && rpoSec <= runbook.rpoHours * 3600;
+  const rpoNote = rpoKnown ? (metTarget ? "RPO within target: yes" : "RPO EXCEEDS target") : "RPO not measured (no backups found)";
+  const outcome = worst([...steps.map((s) => s.outcome), rpoKnown && !metTarget ? "warn" : "pass"]);
   return {
     capability: "dr-drill",
     id: shortId("DR"),
@@ -102,7 +129,7 @@ export async function runDrill(ctx: ResilienceContext, runbook: Runbook): Promis
     finishedAt: nowIso(),
     durationSec: ctx.client.isDemo ? Math.round(steps.reduce((a, s) => a + s.ms, 0) / 1000) : Math.round((Date.now() - t0) / 1000),
     outcome,
-    summary: `${runbook.steps.length}-step runbook executed against "${runbook.environment}"; RTO ${Math.round(rtoSec)}s, RPO within target: ${metTarget ? "yes" : "no"}.`,
+    summary: `${runbook.steps.length}-step runbook executed against "${runbook.environment}"; RTO ${Math.round(rtoSec)}s, ${rpoNote}.`,
     demo: ctx.client.isDemo,
     controls: CONTROLS["dr-drill"],
     runbook: runbook.name,

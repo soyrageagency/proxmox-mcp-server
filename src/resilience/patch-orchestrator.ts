@@ -119,7 +119,14 @@ async function postPatchHealth(ctx: ResilienceContext, guestBase: string): Promi
   }
 }
 
-/** Whether "now" falls inside a "Ddd hh:mm-hh:mm" window. Empty = always open. */
+const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/**
+ * Whether "now" falls inside a "Ddd hh:mm-hh:mm" window (e.g. "Sat 02:00-05:00").
+ * Empty = always open. The optional day token is honoured; for a window that
+ * wraps past midnight, the pre-midnight half belongs to the named day and the
+ * post-midnight half to the following day.
+ */
 export function windowOpen(window: string, at = new Date()): boolean {
   if (!window.trim()) return true;
   const m = /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/.exec(window);
@@ -127,7 +134,16 @@ export function windowOpen(window: string, at = new Date()): boolean {
   const mins = at.getHours() * 60 + at.getMinutes();
   const start = Number(m[1]) * 60 + Number(m[2]);
   const end = Number(m[3]) * 60 + Number(m[4]);
-  return start <= end ? mins >= start && mins <= end : mins >= start || mins <= end;
+  const wraps = start > end;
+  const inTime = wraps ? mins >= start || mins <= end : mins >= start && mins <= end;
+  if (!inTime) return false;
+
+  const dm = /\b(mon|tue|wed|thu|fri|sat|sun)/i.exec(window);
+  if (!dm) return true; // time-only window → any day
+  const want = DAY_NAMES.indexOf(dm[1].toLowerCase());
+  const today = at.getDay();
+  if (!wraps) return today === want;
+  return mins >= start ? today === want : today === (want + 1) % 7;
 }
 
 /** Orchestrate a patch run and return an (unsigned) evidence report. */

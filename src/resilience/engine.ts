@@ -115,12 +115,17 @@ export class ResilienceEngine {
   }
 
   /**
-   * Recent reports for the dashboard: real runs from disk, back-filled with
-   * in-memory demo samples for any capability that has never been run (so the
-   * dashboard always shows all three capabilities with believable evidence).
+   * Recent reports for the dashboard: real runs from disk. In DEMO mode only,
+   * capabilities that have never been run are back-filled with fabricated
+   * in-memory samples so the dashboard looks alive.
+   *
+   * Against a real cluster we return exactly what is on disk and NOTHING else:
+   * the sample builders perform real work (restoring ephemeral VMs, snapshotting
+   * guests), so they must never be triggered by a read-only listing.
    */
   async recentReports(): Promise<ResilienceReport[]> {
     const disk = this.diskReports();
+    if (!this.ctx.client.isDemo) return disk;
     const have = new Set(disk.map((r) => r.capability));
     const need = (["backup-verify", "patch-orchestrate", "dr-drill"] as const).filter((c) => !have.has(c));
     if (need.length === 0) return disk;
@@ -143,8 +148,12 @@ export class ResilienceEngine {
     return out.sort((a, b) => order[a.capability] - order[b.capability]);
   }
 
-  /** Build (and cache) one signed sample report per capability for demos. */
+  /**
+   * Build (and cache) one signed sample report per capability for demos.
+   * Refuses to run outside demo mode — the builders touch the real cluster.
+   */
   private async demoSamples(): Promise<ResilienceReport[]> {
+    if (!this.ctx.client.isDemo) return [];
     if (this.samplesCache) return this.samplesCache;
     const bv = await verifyBackups(this.ctx, {});
     const patch = await orchestratePatching(this.ctx, {});
