@@ -52,13 +52,16 @@ async function candidates(ctx: ResilienceContext, opts: VerifyOptions): Promise<
       if (!vmid) continue;
       if (opts.vmid && vmid !== opts.vmid) continue;
       const ctime = Number(it.ctime ?? 0);
+      // Compare on the same clamped age we store, so a future-dated archive
+      // (clock skew → negative age) can't masquerade as the newest one.
+      const ageSec = Math.max(0, now - ctime);
       const prev = best.get(vmid);
-      if (!prev || now - ctime < prev.ageSec) {
+      if (!prev || ageSec < prev.ageSec) {
         best.set(vmid, {
           vmid,
           name: nameOf(vmid),
           archive: String(it.volid ?? ""),
-          ageSec: Math.max(0, now - ctime),
+          ageSec,
           sizeBytes: Number(it.size ?? 0),
         });
       }

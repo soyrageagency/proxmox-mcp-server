@@ -33,13 +33,22 @@ export function canonical(value: unknown): string {
   const seen = new WeakSet();
   const walk = (v: unknown): unknown => {
     if (v === null || typeof v !== "object") return v;
+    // Only guard true ancestors: releasing the node after recursing means a
+    // value referenced twice (a DAG, not a cycle) still serialises in full —
+    // otherwise the digest would silently drop data.
     if (seen.has(v as object)) return undefined;
     seen.add(v as object);
-    if (Array.isArray(v)) return v.map(walk);
-    const entries = Object.entries(v as Record<string, unknown>)
-      .filter(([, val]) => val !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return Object.fromEntries(entries.map(([k, val]) => [k, walk(val)]));
+    let out: unknown;
+    if (Array.isArray(v)) {
+      out = v.map(walk);
+    } else {
+      const entries = Object.entries(v as Record<string, unknown>)
+        .filter(([, val]) => val !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      out = Object.fromEntries(entries.map(([k, val]) => [k, walk(val)]));
+    }
+    seen.delete(v as object);
+    return out;
   };
   return JSON.stringify(walk(value));
 }
