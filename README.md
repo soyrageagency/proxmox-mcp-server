@@ -91,6 +91,20 @@ Three new capabilities turn Proxmox MCP Server from “operate the cluster” in
 
 ## ⚡ Quick install (one command)
 
+> **Just want the terminal dashboard? No Node required.** Install the standalone `rageprox` binary — a Node runtime and the app fused into one file:
+>
+> **Windows (PowerShell):**
+> ```powershell
+> irm https://raw.githubusercontent.com/soyrageagency/proxmox-mcp-server/main/scripts/install.ps1 | iex
+> ```
+> **macOS / Linux:**
+> ```sh
+> curl -fsSL https://raw.githubusercontent.com/soyrageagency/proxmox-mcp-server/main/scripts/install.sh | sh
+> ```
+> Then run `rageprox` (preview with `PROXMOX_MCP_DEMO=true rageprox`). Re-run the installer any time to update — and the app tells you when a new version ships.
+>
+> Prefer the MCP-server-for-Claude-Desktop path (with the config wizard)? Use the Node installer below.
+
 **Never done this before? It's 3 steps and about 3 minutes.** You do **not** need to touch any config file — a friendly wizard asks you a few questions and sets up everything.
 
 #### ✅ Step 1 — Install the two things you need (once)
