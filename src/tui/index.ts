@@ -22,6 +22,7 @@ import { loadConfig } from "../config.js";
 import { Logger } from "../logger.js";
 import { ProxmoxClient } from "../proxmox/client.js";
 import { TuiApp } from "./app.js";
+import { updateNoticeLine } from "../update/notice.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -58,6 +59,11 @@ async function main(): Promise<void> {
     process.stdout.write((await app.frame(98, 30, view, overlay)) + "\n");
     process.exit(0);
   }
+
+  // A one-line "there's an update" notice, printed before the TUI takes the
+  // screen (cached after the first run, so it doesn't delay launch).
+  const notice = await updateNoticeLine();
+  if (notice) process.stderr.write(`  ${notice}\n`);
 
   await app.start();
 }

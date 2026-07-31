@@ -1,0 +1,28 @@
+{
+  "product": "proxmox-mcp-server",
+  "latest": "1.0.0",
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-06-01",
+      "title": "First public release",
+      "highlights": [
+        "MCP server + terminal dashboard for Proxmox VE over one safe client",
+        "Nodes, QEMU VMs and LXC containers: status, lifecycle and snapshots",
+        "Read-only mode and a guest allowlist for locked-down clusters"
+      ],
+      "url": "https://github.com/soyrageagency/proxmox-mcp-server/releases/tag/v1.0.0",
+      "critical": false
+    }
+  ],
+  "announcements": [
+    {
+      "id": "welcome-1_0",
+      "date": "2026-07-31",
+      "title": "Thanks for running Proxmox MCP Server",
+      "body": "Built by SoyRage Agency. If it saves you time, a star on GitHub helps others find it.",
+      "url": "https://github.com/soyrageagency/proxmox-mcp-server",
+      "level": "info"
+    }
+  ]
+}

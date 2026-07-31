@@ -34,3 +34,4 @@ coverage/
 # Resilience evidence reports & signing key (generated at runtime)
 resilience-reports/
 *.ed25519.pem
+build/

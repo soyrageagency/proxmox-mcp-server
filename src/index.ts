@@ -15,6 +15,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
+import { updateNoticeLine } from "./update/notice.js";
 import { Logger } from "./logger.js";
 import { ProxmoxClient } from "./proxmox/client.js";
 import { BUILTIN_PLUGINS, selectPlugins } from "./plugins.js";
@@ -90,6 +91,9 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info("MCP server is ready and listening on stdio.");
+
+  // Non-blocking: note if a newer version is available (logs to stderr only).
+  void updateNoticeLine().then((line) => { if (line) logger.info(line); }).catch(() => {});
 
   const shutdown = (signal: string) => {
     logger.info(`Received ${signal}, shutting down.`);
