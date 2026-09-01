@@ -25,6 +25,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/MCP-1.x-6E56CF)](https://modelcontextprotocol.io)
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%20API-E57000?logo=proxmox&logoColor=white)](https://pve.proxmox.com/pve-docs/api-viewer/)
+[![npm](https://img.shields.io/npm/v/@soyrageagency/proxmox-mcp?logo=npm&color=CB3837)](https://www.npmjs.com/package/@soyrageagency/proxmox-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/@soyrageagency/proxmox-mcp?logo=npm&color=CB3837&label=downloads)](https://www.npmjs.com/package/@soyrageagency/proxmox-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 
 ### Designed, built & maintained by **[SoyRage Agency](https://soyrage.es/)** · **https://soyrage.es/**
@@ -34,6 +36,18 @@
 </div>
 
 > 🐳 Looking for the Docker equivalent? See the sister project **[docker-mcp-server](https://github.com/soyrageagency/docker-mcp-server)** — same philosophy, for Docker & Compose.
+
+---
+
+## ✨ New in this release
+
+| | | |
+| :--: | --- | --- |
+| 🌐 | **Run it on the cluster, not on your laptop** | MCP normally means one server process per client, on the client's machine — backwards when the thing you are managing *is* the server. Set `PROXMOX_MCP_HTTP=true` and one instance serves every machine on your network over HTTP. Bearer token, loopback by default. → [Run it over the network](#-run-it-over-the-network-http) |
+| 🩺 | **"Is anything wrong?" in one call** | `cluster_health` checks quorum, node pressure, storage headroom, stopped guests and backup coverage, then reports only what needs attention. Plus `find_idle_guests` (long uptime, zero CPU, holding RAM) and `find_orphaned_disks` (images whose VM no longer exists). → [Diagnostics](#-diagnostics) |
+| 💬 | **Workflows your client offers you** | MCP **prompts** — *audit my cluster*, *plan a maintenance window*, *explain this guest*, *free up space*. You no longer have to know which tool to ask for. → [Guided workflows](#-guided-workflows-prompts--resources) |
+
+See the [**roadmap**](./ROADMAP.md) for what comes next.
 
 ---
 
@@ -82,7 +96,10 @@ Three new capabilities turn Proxmox MCP Server from “operate the cluster” in
 - [Project structure](#-project-structure)
 - [Development](#-development)
 - [Troubleshooting & FAQ](#-troubleshooting--faq)
-- [Roadmap](#-roadmap)
+- [Run it over the network (HTTP)](#-run-it-over-the-network-http)
+- [Diagnostics](#-diagnostics)
+- [Guided workflows (prompts & resources)](#-guided-workflows-prompts--resources)
+- [Roadmap](#-roadmap) · [full roadmap →](./ROADMAP.md)
 - [Support the project](#-support-the-project)
 - [Credits & License](#-credits--license)
 
@@ -480,6 +497,117 @@ No install step needed: `npx` fetches the package on first run and keeps it up t
 
 ---
 
+## 🌐 Run it over the network (HTTP)
+
+By default an MCP server talks over **stdio**: your AI client starts a copy of
+it as a child process, on your machine. That is fine for a laptop tool and
+awkward for a homelab, where the cluster you want to manage is a different
+machine entirely — and where you probably want your desktop, your laptop and
+your phone all talking to the same thing.
+
+Set one variable and it serves **Streamable HTTP** instead:
+
+```sh
+PROXMOX_MCP_HTTP=true PROXMOX_MCP_HTTP_TOKEN="$(openssl rand -hex 32)" PROXMOX_HOST=https://192.168.1.10:8006 PROXMOX_TOKEN_ID='root@pam!mcp' PROXMOX_TOKEN_SECRET=… npx -y @soyrageagency/proxmox-mcp
+```
+
+Then point any MCP client at it:
+
+```jsonc
+{
+  "mcpServers": {
+    "proxmox": {
+      "type": "http",
+      "url": "http://10.0.0.5:8619/mcp",
+      "headers": { "Authorization": "Bearer <the token you generated>" }
+    }
+  }
+}
+```
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `PROXMOX_MCP_HTTP` | `false` | Serve over HTTP instead of stdio. |
+| `PROXMOX_MCP_HTTP_HOST` | `127.0.0.1` | Interface to bind. Use `0.0.0.0` **only** behind a VPN. |
+| `PROXMOX_MCP_HTTP_PORT` | `8619` | TCP port. |
+| `PROXMOX_MCP_HTTP_PATH` | `/mcp` | Endpoint path. |
+| `PROXMOX_MCP_HTTP_TOKEN` | *(none)* | Bearer token required on every request. **Set this.** |
+| `PROXMOX_MCP_HTTP_ALLOWED_HOSTS` | derived | `Host` headers accepted (DNS-rebinding protection). |
+| `PROXMOX_MCP_HTTP_ALLOWED_ORIGINS` | *(none)* | `Origin` values accepted, for browser clients. |
+
+**Read this before you expose it.** Anyone who can reach the port can control
+your cluster. It binds loopback by default and warns loudly if you start it
+without a token. Put it behind your VPN — this is not a service to publish to
+the Internet, and combining it with `PROXMOX_MCP_READONLY=true` is a good idea
+for anything you do not fully trust.
+
+There is also `GET /health`, which needs no token, for LXC and container
+healthchecks.
+
+---
+
+## 🩺 Diagnostics
+
+Three read-only tools aimed at the questions you actually ask, rather than at
+the API surface:
+
+**`cluster_health`** — one call that answers *is anything wrong?* It checks
+quorum, per-node CPU and memory pressure, storage headroom, guests that are not
+running, how stale the newest backup is, and **which guests have no backup at
+all**. It reports findings ranked by severity, not a data dump:
+
+```text
+MOSTLY HEALTHY — 2 warning(s), nothing critical.
+
+   AREA     DETAIL
+-  -------  -----------------------------------------------------------------
+!  guests   2 of 7 guest(s) not running: 102 windows-rdp, 203 backup-runner.
+!  backups  4 guest(s) have no backup at all: 102, 200, 202, 203.
+✓  quorum   Cluster "soyrage-lab" is quorate (2 nodes).
+✓  nodes    All 2 node(s) online.
+✓  storage  All 3 storage(s) below 85.0%.
+```
+
+**`find_idle_guests`** — guests with long uptime and near-zero CPU, sorted by
+the memory they are holding. It also says out loud that idle-by-design services
+exist, so the assistant does not cheerfully suggest shutting down your DNS
+resolver.
+
+**`find_orphaned_disks`** — disk images whose owning VMID has no guest. Deleting
+a VM does not always remove every volume, and the leftovers are invisible in the
+web UI. On a lab that has been running a while this routinely finds tens of GB.
+
+All three are read-only, so they stay available with `PROXMOX_MCP_READONLY=true`,
+and all three work in demo mode.
+
+---
+
+## 💬 Guided workflows (prompts & resources)
+
+Tools only answer a question you already knew how to ask. **MCP prompts** are
+the other half: your client lists them, so the workflow is discoverable without
+knowing which of the 39 tools to reach for or in what order.
+
+| Prompt | What it does |
+| --- | --- |
+| **audit-cluster** | Full read-only sweep — health, waste, idle guests, backup coverage — ending in a prioritised list of what to do. Narrow it with `capacity`, `reliability` or `waste`. |
+| **plan-maintenance** | Works out the safe order to reboot or patch, what to snapshot first, and what breaks while each guest is down. |
+| **explain-guest** | Everything about one VM or container in plain language, including whether it is actually protected. |
+| **free-up-space** | Finds reclaimable space and ranks it by space returned ÷ risk, with the command for each. |
+
+Each prompt also tells the assistant what a good answer looks like: verdict
+first, findings ranked, no padding, and an explicit instruction not to change
+anything.
+
+**Resources** expose the cluster as attachable context, so the model can be
+handed the current picture instead of spending three tool calls rebuilding it:
+
+- `proxmox://cluster/overview` — nodes, guests and storage in one snapshot.
+- `proxmox://server/capabilities` — which plugins are loaded, whether the server
+  is read-only, and what the allowlist permits.
+
+---
+
 ## ⚙️ Configuration reference
 
 Every setting is an environment variable. A local **`.env`** is loaded automatically; a JSON **config file** (`proxmox-mcp.config.json`) provides defaults. Precedence (low → high): defaults → config file → `.env` → environment. See [`.env.example`](./.env.example).
@@ -740,16 +868,15 @@ No. The server talks only to your Proxmox API and your MCP client over local std
 
 ## 🗺️ Roadmap
 
-- [x] Nodes, guests, lifecycle, snapshots, storage, tasks, cluster
-- [x] Guest **OS** detection (QEMU agent) · suspend/resume
-- [x] **Migrate**, **clone**, **resize**, **backup** (vzdump), **delete** guests
-- [x] **Backups**: list & **restore** archives · **Provisioning**: create VMs/CTs from templates & ISOs
-- [x] Guided setup wizard · API‑token & ticket auth · read‑only & allowlist · modular plugins
-- [x] One‑command installer · demo mode · terminal UI (TUI) · CI
-- [x] **Resilience & Compliance**: signed backup verification · patch orchestration with auto‑rollback · DR drills (ISO 27001 / NIS2 / DORA)
-- [ ] Scheduled resilience runs (cron) & e‑mail/Slack delivery of evidence
-- [ ] Cloud‑init provisioning presets
-- [x] Published npm package for one‑line `npx` usage
+The full roadmap — what is shipped, what is next, and what is **deliberately
+not planned** — lives in [**ROADMAP.md**](./ROADMAP.md).
+
+The short version: one-command install into an LXC on any Proxmox host, then
+finer-grained permissions than the current read-only/read-write switch. Metrics
+history and multi-cluster are further out because they need real design first.
+
+Explicitly not planned: replacing the Proxmox web UI, autonomous action without
+confirmation, and telemetry of any kind.
 
 ---
 
