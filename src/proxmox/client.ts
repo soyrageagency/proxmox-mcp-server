@@ -696,10 +696,20 @@ function demoStorageContent(content?: string): Array<Record<string, unknown>> {
     { volid: "local:iso/debian-12.7.0-amd64-netinst.iso", content: "iso", size: 660_000_000 },
     { volid: "local:iso/ubuntu-24.04.1-live-server-amd64.iso", content: "iso", size: 2_800_000_000 },
   ];
+  // Includes a deliberate orphan (vm-150) so find_orphaned_disks has something
+  // to report in demo mode.
+  const images = [
+    { volid: "local-lvm:vm-100-disk-0", content: "images", format: "raw", size: 32 * GiB, vmid: 100 },
+    { volid: "local-lvm:vm-101-disk-0", content: "images", format: "raw", size: 64 * GiB, vmid: 101 },
+    { volid: "local-lvm:vm-102-disk-0", content: "images", format: "raw", size: 80 * GiB, vmid: 102 },
+    { volid: "local-lvm:vm-150-disk-0", content: "images", format: "raw", size: 48 * GiB, vmid: 150 },
+    { volid: "local-lvm:vm-150-disk-1", content: "images", format: "raw", size: 12 * GiB, vmid: 150 },
+  ];
+  if (content === "images") return images;
   if (content === "backup") return backups;
   if (content === "vztmpl") return templates;
   if (content === "iso") return isos;
-  return [...backups, ...templates, ...isos];
+  return [...images, ...backups, ...templates, ...isos];
 }
 
 function demoSnapshots(guest: Guest): Array<Record<string, unknown>> {

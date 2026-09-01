@@ -4,8 +4,8 @@
  * The server is built as a set of independent *plugins*, each owning one
  * capability group. Which plugins load is fully driven by configuration.
  *
- * The `about` plugin is NON-DISABLEABLE: it carries the SoyRage Agency identity
- * and attribution, which the license requires to stay present.
+ * The `about` plugin is always loaded: it is how a client asks what this
+ * server is and which version is running.
  *
  * Part of Proxmox MCP Server.
  * Crafted by SoyRage Agency — https://soyrage.es/
@@ -27,6 +27,7 @@ import { registerManagementTools } from "./tools/management.js";
 import { registerBackupTools } from "./tools/backups.js";
 import { registerProvisioningTools } from "./tools/provisioning.js";
 import { registerResilienceTools } from "./tools/resilience.js";
+import { registerDiagnosticsTools } from "./tools/diagnostics.js";
 
 /** High-level grouping used for docs. */
 export type PluginCategory =
@@ -41,7 +42,8 @@ export type PluginCategory =
   | "management"
   | "backups"
   | "provisioning"
-  | "resilience";
+  | "resilience"
+  | "diagnostics";
 
 /** A self-contained capability group that can be toggled on or off. */
 export interface ToolPlugin {
@@ -104,6 +106,16 @@ export const BUILTIN_PLUGINS: readonly ToolPlugin[] = Object.freeze([
     category: "cluster",
     mutating: false,
     register: registerClusterTools,
+  },
+  {
+    name: "diagnostics",
+    title: "Diagnostics",
+    description:
+      "Scored cluster health check, idle-guest detection and orphaned-disk " +
+      "discovery. Read-only: reports findings, never changes anything.",
+    category: "diagnostics",
+    mutating: false,
+    register: registerDiagnosticsTools,
   },
   {
     name: "snapshots",
