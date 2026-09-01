@@ -28,6 +28,7 @@ import { registerBackupTools } from "./tools/backups.js";
 import { registerProvisioningTools } from "./tools/provisioning.js";
 import { registerResilienceTools } from "./tools/resilience.js";
 import { registerDiagnosticsTools } from "./tools/diagnostics.js";
+import { registerPrompts } from "./tools/prompts.js";
 
 /** High-level grouping used for docs. */
 export type PluginCategory =
@@ -43,7 +44,8 @@ export type PluginCategory =
   | "backups"
   | "provisioning"
   | "resilience"
-  | "diagnostics";
+  | "diagnostics"
+  | "prompts";
 
 /** A self-contained capability group that can be toggled on or off. */
 export interface ToolPlugin {
@@ -106,6 +108,17 @@ export const BUILTIN_PLUGINS: readonly ToolPlugin[] = Object.freeze([
     category: "cluster",
     mutating: false,
     register: registerClusterTools,
+  },
+  {
+    name: "prompts",
+    title: "Guided workflows",
+    description:
+      "MCP prompts (audit, maintenance plan, explain a guest, free up space) " +
+      "and resources (cluster overview, server capabilities), so clients can " +
+      "offer ready-made workflows instead of waiting to be asked.",
+    category: "prompts",
+    mutating: false,
+    register: registerPrompts,
   },
   {
     name: "diagnostics",
