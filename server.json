@@ -1,0 +1,56 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.soyrageagency/proxmox-mcp-server",
+  "description": "Chat with your Proxmox VE cluster: list nodes, VMs and LXC containers, read status and storage, manage the guest lifecycle and take snapshots — with read-only and allowlist safety.",
+  "status": "active",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/soyrageagency/proxmox-mcp-server",
+    "source": "github"
+  },
+  "websiteUrl": "https://soyrage.es/tools/proxmox-mcp",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@soyrageagency/proxmox-mcp",
+      "version": "1.0.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "PROXMOX_HOST",
+          "description": "Base URL of the Proxmox VE API, e.g. https://192.168.1.10:8006",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_ID",
+          "description": "API token id in the form user@realm!tokenname, e.g. root@pam!mcp",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_TOKEN_SECRET",
+          "description": "API token secret (the UUID shown once when the token is created)",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "PROXMOX_VERIFY_TLS",
+          "description": "Verify the TLS certificate. Most Proxmox installs use a self-signed cert, so this is usually false.",
+          "isRequired": false,
+          "default": "true",
+          "format": "boolean"
+        },
+        {
+          "name": "PROXMOX_MCP_READONLY",
+          "description": "Expose only read tools — no start/stop/reboot, no snapshot writes.",
+          "isRequired": false,
+          "default": "false",
+          "format": "boolean"
+        }
+      ]
+    }
+  ]
+}

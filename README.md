@@ -90,6 +90,18 @@ Three new capabilities turn Proxmox MCP Server from “operate the cluster” in
 
 ## ⚡ Quick install (one command)
 
+> **Already use an MCP client?** Point it at the published package — nothing to clone or build:
+>
+> ```jsonc
+> "proxmox": {
+>   "command": "npx",
+>   "args": ["-y", "@soyrageagency/proxmox-mcp"],
+>   "env": { "PROXMOX_HOST": "https://192.168.1.10:8006", "PROXMOX_TOKEN_ID": "root@pam!mcp", "PROXMOX_TOKEN_SECRET": "…" }
+> }
+> ```
+>
+> Or try the terminal dashboard straight away: `npx -y -p @soyrageagency/proxmox-mcp proxmox-mcp-tui`
+
 > **Just want the terminal dashboard? No Node required.** Install the standalone `rageprox` binary — a Node runtime and the app fused into one file:
 >
 > **Windows (PowerShell):**
@@ -450,8 +462,8 @@ Add the server to your MCP client. Example for **Claude Desktop**
 {
   "mcpServers": {
     "proxmox": {
-      "command": "node",
-      "args": ["/absolute/path/to/proxmox-mcp-server/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@soyrageagency/proxmox-mcp"],
       "env": {
         "PROXMOX_HOST": "https://192.168.1.10:8006",
         "PROXMOX_TOKEN_ID": "root@pam!mcp",
@@ -464,7 +476,7 @@ Add the server to your MCP client. Example for **Claude Desktop**
 }
 ```
 
-A ready‑to‑edit copy lives in [`examples/claude_desktop_config.json`](./examples/claude_desktop_config.json). Restart your client and ask: *“What Proxmox nodes and VMs do I have?”* — the assistant will greet you on behalf of SoyRage Agency and take it from there.
+No install step needed: `npx` fetches the package on first run and keeps it up to date. A ready‑to‑edit copy lives in [`examples/claude_desktop_config.json`](./examples/claude_desktop_config.json). Restart your client and ask: *“What Proxmox nodes and VMs do I have?”*
 
 ---
 
@@ -737,7 +749,7 @@ No. The server talks only to your Proxmox API and your MCP client over local std
 - [x] **Resilience & Compliance**: signed backup verification · patch orchestration with auto‑rollback · DR drills (ISO 27001 / NIS2 / DORA)
 - [ ] Scheduled resilience runs (cron) & e‑mail/Slack delivery of evidence
 - [ ] Cloud‑init provisioning presets
-- [ ] Published npm package for one‑line `npx` usage
+- [x] Published npm package for one‑line `npx` usage
 
 ---
 

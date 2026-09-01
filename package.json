@@ -1,11 +1,12 @@
 {
-  "name": "proxmox-mcp-server",
+  "name": "@soyrageagency/proxmox-mcp",
   "version": "1.0.0",
   "description": "Chat with your Proxmox VE cluster. A Model Context Protocol (MCP) server that lets any LLM list nodes, VMs and LXC containers, read status, manage lifecycle and take snapshots — safely. Built by SoyRage Agency.",
   "type": "module",
   "license": "MIT",
+  "mcpName": "io.github.soyrageagency/proxmox-mcp-server",
   "author": "SoyRage Agency (https://soyrage.es/)",
-  "homepage": "https://github.com/soyrageagency/proxmox-mcp-server#readme",
+  "homepage": "https://soyrage.es/tools/proxmox-mcp",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/soyrageagency/proxmox-mcp-server.git"
@@ -33,7 +34,11 @@
     "llm",
     "claude"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
+    "proxmox-mcp": "dist/index.js",
     "proxmox-mcp-server": "dist/index.js",
     "proxmox-mcp-tui": "dist/tui/index.js",
     "rageprox": "dist/tui/index.js",
@@ -42,6 +47,7 @@
   "main": "dist/index.js",
   "files": [
     "dist",
+    "scripts/install.mjs",
     "README.md",
     "LICENSE"
   ],
