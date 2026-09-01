@@ -43,7 +43,7 @@ const aboutReq = { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: 
 
 const full = await mcp({}, [init, notif, listReq, aboutReq]);
 const initRes = full.find((m) => m.id === 1);
-ok("initialize returns SoyRage instructions", initRes?.result?.instructions?.includes("SoyRage Agency"));
+ok("initialize returns server instructions", initRes?.result?.instructions?.includes("Proxmox MCP Server"));
 const tools = full.find((m) => m.id === 2)?.result?.tools?.map((t) => t.name) || [];
 ok("full mode exposes 36 tools", tools.length === 36, `got ${tools.length}`);
 ok("has lifecycle & snapshot tools", tools.includes("start_guest") && tools.includes("create_snapshot"));

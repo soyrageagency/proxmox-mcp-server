@@ -3,7 +3,7 @@
  *
  * Part of Proxmox MCP Server.
  * Crafted by SoyRage Agency — https://soyrage.es/
- * Licensed under the SoyRage Attribution License (see LICENSE).
+ * MIT licensed (see LICENSE).
  */
 
 import { randomBytes } from "node:crypto";

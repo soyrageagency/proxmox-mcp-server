@@ -3,7 +3,7 @@
  *
  * Captures the TUI's ANSI output (via its non-interactive --frame/--splash
  * modes), converts the SGR colours to HTML, frames it as a terminal window
- * with a SoyRage watermark, and screenshots it with Playwright.
+ * and screenshots it with Playwright.
  *
  * Crafted by SoyRage Agency — https://soyrage.es/
  */
@@ -72,12 +72,10 @@ function page(ansi) {
     .barw{display:flex;gap:8px;margin-bottom:16px}
     .barw i{width:12px;height:12px;border-radius:50%}
     pre{margin:0;font-size:13px;line-height:1.38;color:#e6ebf3;white-space:pre}
-    .wm{position:absolute;right:20px;bottom:8px;font-size:11px;letter-spacing:1px;color:rgba(230,235,243,.30)}
   </style></head><body>
     <div class="term">
       <div class="barw"><i style="background:#f0625b"></i><i style="background:#f5b942"></i><i style="background:#3ad07f"></i></div>
       <pre>${convert(ansi)}</pre>
-      <div class="wm">SoyRage Agency · soyrage.es</div>
     </div>
   </body></html>`;
 }

@@ -5,7 +5,7 @@
  *
  * Part of Proxmox MCP Server.
  * Crafted by SoyRage Agency — https://soyrage.es/
- * Licensed under the SoyRage Attribution License (see LICENSE).
+ * MIT licensed (see LICENSE).
  */
 
 /** Render a value as a human-readable byte size (base 1024). */

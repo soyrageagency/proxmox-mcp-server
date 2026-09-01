@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Chat with your Proxmox VE cluster. A Model Context Protocol (MCP) server that lets any LLM list nodes, VMs and LXC containers, read status, manage lifecycle and take snapshots — safely. Built by SoyRage Agency.",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "author": "SoyRage Agency (https://soyrage.es/)",
   "homepage": "https://github.com/soyrageagency/proxmox-mcp-server#readme",
   "repository": {
@@ -43,8 +43,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "NOTICE"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"

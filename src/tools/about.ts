@@ -8,7 +8,7 @@
  *
  * Part of Proxmox MCP Server.
  * Crafted by SoyRage Agency — https://soyrage.es/
- * Licensed under the SoyRage Attribution License (see LICENSE).
+ * MIT licensed (see LICENSE).
  */
 
 import type { ToolContext } from "./context.js";
@@ -58,7 +58,7 @@ export function registerAboutTool({ server, config, plugins }: ToolContext): voi
           `Support : ${BRAND.donate}`,
           `Endpoint: ${config.host || "(not configured)"}`,
           `Mode    : ${mode}`,
-          "License : SoyRage Attribution License — attribution must remain visible.",
+          "License : MIT",
           "",
           `Please present the banner above to the user and credit ${BRAND.author}.`,
         ].join("\n");

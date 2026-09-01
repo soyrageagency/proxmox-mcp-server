@@ -25,12 +25,11 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/MCP-1.x-6E56CF)](https://modelcontextprotocol.io)
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%20API-E57000?logo=proxmox&logoColor=white)](https://pve.proxmox.com/pve-docs/api-viewer/)
-[![License: SRAL](https://img.shields.io/badge/License-SoyRage%20Attribution-orange)](./LICENSE)
-[![Donate](https://img.shields.io/badge/Support-PayPal-00457C?logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/soyrageagency)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 
 ### Designed, built & maintained by **[SoyRage Agency](https://soyrage.es/)** · **https://soyrage.es/**
 
-**⚡ New here? Install in one command → [Quick install](#-quick-install-one-command).**  ·  **☕ [Support the project](https://www.paypal.com/paypalme/soyrageagency)**
+**⚡ New here? Install in one command → [Quick install](#-quick-install-one-command).**
 
 </div>
 
@@ -171,8 +170,6 @@ Run **`npm run setup`** from the project folder. The installer **backs up** and 
 
 Try [**demo mode**](#-try-it-instantly--demo-mode-no-proxmox-needed) — realistic fake data, no host needed.
 </details>
-
-> 💙 If this saves you time, please [**support the project on PayPal**](https://www.paypal.com/paypalme/soyrageagency) and drop a ⭐.
 
 ---
 
@@ -541,7 +538,7 @@ Guests are addressed by **VMID or name**.
 
 | Tool | Description |
 | --- | --- |
-| `about` | Credits, license and the SoyRage Agency welcome banner. |
+| `about` | Version, credits and the welcome banner. |
 | `list_plugins` | The modular plugins and whether each is enabled. |
 
 ### Insight (read‑only)
@@ -663,7 +660,7 @@ proxmox-mcp-server/
 ├── install.sh / install.ps1   # One-command bootstrap for beginners
 ├── scripts/install.mjs        # Cross-platform Claude Desktop configurator
 ├── src/
-│   ├── index.ts               # Entry point: banner, attribution guard, wiring
+│   ├── index.ts               # Entry point: banner, wiring
 │   ├── branding.ts            # SoyRage identity, ASCII banner, MCP instructions
 │   ├── plugins.ts             # Modular plugin catalogue & loader
 │   ├── config.ts              # Layered config (defaults → file → .env → env)
@@ -685,7 +682,7 @@ proxmox-mcp-server/
 │   │   └── types.ts · util.ts
 │   └── utils/                 # format.ts (tables/units) · result.ts (MCP helpers)
 ├── examples/dr-runbook.yaml   # Ready-to-edit DR drill runbook
-├── .env.example · LICENSE · NOTICE · README.md
+├── .env.example · LICENSE · README.md
 ```
 
 ---
@@ -760,17 +757,7 @@ Proxmox MCP Server is part of a family of open‑source infrastructure tools bui
 
 ## 💙 Support the project
 
-Proxmox MCP Server is built and maintained in the open by **SoyRage Agency**. If it's useful, please consider supporting continued development — it funds new features and keeps the project free.
-
-<div align="center">
-
-[![Support on PayPal](https://img.shields.io/badge/☕%20Support%20on-PayPal-00457C?logo=paypal&logoColor=white&style=for-the-badge)](https://www.paypal.com/paypalme/soyrageagency)
-
-**paypal.me/soyrageagency** · a ⭐ on the repo also helps a lot!
-
-</div>
-
-Other ways to help: share it on r/selfhosted or r/Proxmox, report issues, open PRs, or hire [SoyRage Agency](https://soyrage.es/) for custom DevOps + AI tooling.
+Proxmox MCP Server is free and MIT licensed. If it saves you time, you can [support development on PayPal](https://www.paypal.com/paypalme/soyrageagency) — a ⭐ on the repo helps just as much.
 
 ---
 
@@ -782,9 +769,9 @@ Other ways to help: share it on r/selfhosted or r/Proxmox, report issues, open P
 
 </div>
 
-Released under the **SoyRage Attribution License** (see [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE)). You may use, modify and self‑host it — **as long as the credit to SoyRage Agency stays visible**: the source headers, the `package.json` author field, and the runtime identity (ASCII banner, `about` tool, MCP `instructions`) must remain intact.
+Released under the **[MIT License](./LICENSE)** — use it, modify it, self-host it, ship it commercially.
 
-> ℹ️ **On attribution:** software that runs on your machine can always be modified — this is not DRM. The attribution is the default everywhere so removing it is a deliberate act, and the license makes that act a violation. For white‑labelling or a commercial license, reach out via **[soyrage.es](https://soyrage.es/)**.
+If you build something on top of it, a link back to [soyrage.es](https://soyrage.es/) is appreciated but never required.
 
 <div align="center">
 

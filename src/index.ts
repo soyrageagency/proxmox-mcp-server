@@ -9,7 +9,7 @@
  *
  * Part of Proxmox MCP Server.
  * Crafted by SoyRage Agency — https://soyrage.es/
- * Licensed under the SoyRage Attribution License (see LICENSE).
+ * MIT licensed (see LICENSE).
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -20,7 +20,7 @@ import { Logger } from "./logger.js";
 import { ProxmoxClient } from "./proxmox/client.js";
 import { BUILTIN_PLUGINS, selectPlugins } from "./plugins.js";
 import type { PluginInfo } from "./tools/context.js";
-import { ASCII_BANNER, BRAND, mcpInstructions, verifyAttribution } from "./branding.js";
+import { ASCII_BANNER, BRAND, mcpInstructions } from "./branding.js";
 
 const SERVER_NAME = "proxmox-mcp-server";
 const SERVER_VERSION = BRAND.version;
@@ -29,12 +29,11 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const logger = new Logger(config.logLevel);
 
-  // SoyRage Agency welcome banner → stderr (stdout is the JSON-RPC stream).
+  // Welcome banner → stderr (stdout is the JSON-RPC stream).
   process.stderr.write(`${ASCII_BANNER}\n`);
   process.stderr.write(
     `  ${BRAND.product} v${BRAND.version} — by ${BRAND.author} (${BRAND.url})\n\n`,
   );
-  verifyAttribution(logger);
 
   logger.info(`Starting ${SERVER_NAME} v${SERVER_VERSION}`);
   logger.debug("Configuration", {
