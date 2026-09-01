@@ -14,6 +14,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { startHttpTransport } from "./transport/http.js";
 import { loadConfig } from "./config.js";
 import { updateNoticeLine } from "./update/notice.js";
 import { Logger } from "./logger.js";
@@ -63,12 +64,8 @@ async function main(): Promise<void> {
     logger.warn("Proxmox host/credentials not configured — set them, or try PROXMOX_MCP_DEMO=true.");
   }
 
-  const server = new McpServer(
-    { name: SERVER_NAME, version: SERVER_VERSION },
-    { instructions: mcpInstructions() },
-  );
-
-  // Resolve the modular plugin selection and register each enabled plugin.
+  // Resolve the modular plugin selection once; every server instance registers
+  // the same set.
   const selected = selectPlugins(config, logger);
   const enabledNames = new Set(selected.map((p) => p.name));
   const pluginInfo: PluginInfo[] = BUILTIN_PLUGINS.map((p) => ({
@@ -79,24 +76,42 @@ async function main(): Promise<void> {
     enabled: enabledNames.has(p.name),
   }));
 
-  const context = { server, proxmox, config, logger, plugins: pluginInfo };
-  for (const plugin of selected) plugin.register(context);
+  /**
+   * Build a fully wired server. Over HTTP this is called once per session, so
+   * it must not share mutable state between calls.
+   */
+  const createMcpServer = (): McpServer => {
+    const server = new McpServer(
+      { name: SERVER_NAME, version: SERVER_VERSION },
+      { instructions: mcpInstructions() },
+    );
+    const context = { server, proxmox, config, logger, plugins: pluginInfo };
+    for (const plugin of selected) plugin.register(context);
+    return server;
+  };
+
   logger.info(
     config.readOnly
       ? "Tools registered in READ-ONLY mode."
       : "Tools registered in full read/write mode.",
   );
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  logger.info("MCP server is ready and listening on stdio.");
+  let stop: () => Promise<void>;
+  if (config.http.enabled) {
+    stop = await startHttpTransport(config.http, createMcpServer, logger);
+  } else {
+    const server = createMcpServer();
+    await server.connect(new StdioServerTransport());
+    logger.info("MCP server is ready and listening on stdio.");
+    stop = () => server.close();
+  }
 
   // Non-blocking: note if a newer version is available (logs to stderr only).
   void updateNoticeLine().then((line) => { if (line) logger.info(line); }).catch(() => {});
 
   const shutdown = (signal: string) => {
     logger.info(`Received ${signal}, shutting down.`);
-    void server.close().finally(() => process.exit(0));
+    void stop().finally(() => process.exit(0));
   };
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));

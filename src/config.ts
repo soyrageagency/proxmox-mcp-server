@@ -32,6 +32,7 @@ interface FileConfig {
   demo?: boolean;
   allowlist?: string[];
   logLevel?: string;
+  http?: { enabled?: boolean; host?: string; port?: number; path?: string; token?: string; allowedHosts?: string[]; allowedOrigins?: string[] };
   plugins?: { enabled?: string[]; disabled?: string[] };
   ai?: { endpoint?: string; key?: string; model?: string };
   resilience?: {
@@ -129,6 +130,8 @@ export interface AppConfig {
   readonly allowlist: readonly string[];
   /** Diagnostic log level. */
   readonly logLevel: LogLevel;
+  /** Streamable HTTP transport (serve the MCP over the network). */
+  readonly http: HttpConfig;
   /** Modular plugin selection. */
   readonly plugins: PluginSelection;
   /** Optional OpenAI-compatible endpoint powering the TUI's AI copilot. */
@@ -139,6 +142,30 @@ export interface AppConfig {
   readonly aiModel: string;
   /** Resilience & compliance (backup verify, patching, DR drills). */
   readonly resilience: ResilienceConfig;
+}
+
+/**
+ * Streamable HTTP transport.
+ *
+ * Off by default: the usual shape is one server per client, spoken over stdio.
+ * Turn it on to run a single shared server — on the Proxmox host itself, or in
+ * an LXC — that several machines connect to over the network.
+ */
+export interface HttpConfig {
+  /** Serve MCP over HTTP instead of stdio. */
+  readonly enabled: boolean;
+  /** Interface to bind. Defaults to loopback — bind 0.0.0.0 only behind a VPN. */
+  readonly host: string;
+  /** TCP port. */
+  readonly port: number;
+  /** Endpoint path clients POST to. */
+  readonly path: string;
+  /** Optional bearer token required on every request. Strongly recommended. */
+  readonly token: string;
+  /** Host headers accepted (DNS-rebinding protection). Empty = derive from host. */
+  readonly allowedHosts: readonly string[];
+  /** Origins accepted (browser clients). Empty = no Origin restriction. */
+  readonly allowedOrigins: readonly string[];
 }
 
 /** Settings for the resilience & compliance capabilities. */
@@ -191,6 +218,15 @@ export function loadConfig(): AppConfig {
     demo: envFlag("PROXMOX_MCP_DEMO", file.demo ?? false),
     allowlist: Object.freeze(envList("PROXMOX_MCP_ALLOWLIST", file.allowlist ?? [])),
     logLevel,
+    http: Object.freeze({
+      enabled: envFlag("PROXMOX_MCP_HTTP", file.http?.enabled ?? false),
+      host: envStr("PROXMOX_MCP_HTTP_HOST", file.http?.host ?? "127.0.0.1"),
+      port: envNum("PROXMOX_MCP_HTTP_PORT", file.http?.port ?? 8619),
+      path: envStr("PROXMOX_MCP_HTTP_PATH", file.http?.path ?? "/mcp"),
+      token: envStr("PROXMOX_MCP_HTTP_TOKEN", file.http?.token ?? ""),
+      allowedHosts: Object.freeze(envList("PROXMOX_MCP_HTTP_ALLOWED_HOSTS", file.http?.allowedHosts ?? [])),
+      allowedOrigins: Object.freeze(envList("PROXMOX_MCP_HTTP_ALLOWED_ORIGINS", file.http?.allowedOrigins ?? [])),
+    }),
     plugins: Object.freeze({
       enabled: Object.freeze(
         envList("PROXMOX_MCP_PLUGINS", file.plugins?.enabled ?? []),
